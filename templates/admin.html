@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Админ‑панель — Управление зонами</title>
+    <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <h1 class="h4 mb-4">Управление зонами</h1>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">Основные зоны</div>
+                    <div class="card-body">
+                        <textarea id="zonesInput" class="form-control" rows="10">{{ '\n'.join(zones) }}</textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Зоны ретуши</div>
+            <div class="card-body">
+                <textarea id="zonesRepInput" class="form-control" rows="10">{{ '\n'.join(zones_rep) }}</textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="text-end">
+    <button class="btn btn-primary" onclick="saveZones()">Сохранить изменения</button>
+</div>
+
+<script>
+async function saveZones() {
+    const zones = document.getElementById('zonesInput').value.split('\n').map(z => z.trim()).filter(z => z);
+    const zonesRep = document.getElementById('zonesRepInput').value.split('\n').map(z => z.trim()).filter(z => z);
+
+    const response = await fetch('/admin/update_zones', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({zones, zones_rep: zonesRep})
+    });
+
+    if (response.ok) {
+        alert('Зоны успешно сохранены!');
+    } else {
+        alert('Ошибка при сохранении зон');
+    }
+}
+</script>
+</body>
+</html>
