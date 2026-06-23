@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Анализ движения автомобилей</title>
+    <!-- Подключение Bootstrap -->
+    <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
+    <style>
+        table tbody + tbody {
+            border-top: 3px solid #000;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container-fluid py-2">
+        <!-- Верхняя панель с заголовком и выбором даты -->
+        <div class="row mb-2">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h1 id="topMessage" class="h5 mb-0">Анализ движения автомобилей по зонам {{ default_date }}</h1>
+                    <div class="btn-group btn-group-sm me-2" role="group">
+                        <button type="button" class="btn btn-outline-primary active"
+                            onclick="switchZoneType('main')"
+                            id="mainZonesBtn">Основные зоны</button>
+                       <button type="button" class="btn btn-outline-primary"
+                           onclick="switchZoneType('rep')"
+                           id="repZonesBtn">Зоны ретуши</button>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <label for="analysisDate" class="form-label mb-0 small">Выбор даты:</label>
+                        <input type="date" id="analysisDate" value="{{ default_date }}" class="form-control form-control-sm" onchange="updateTitle()">
+                       <button class="btn btn-primary btn-sm" onclick="manualAnalyzeZones()">Применить</button>
+                    </div>
+                </div>
+            </div>
+    </div>
+
+    <!-- Сообщение об ошибках/успехе -->
+    <div id="uploadMessage" class="mb-2"></div>
+
+    <!-- Индикатор загрузки -->
+    <div id="loadingIndicator" class="alert alert-info d-none mb-2" role="alert">
+        <div class="d-flex align-items-center">
+            <div class="spinner-border spinner-border-sm me-2" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+            Загружаем данные...
+        </div>
+    </div>
+
+    <!-- Основная область с таблицей -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body p-2">
+                    
+                    <!-- Область для таблицы — фиксированная высота для 14 строк -->
+                    <div id="resultContent" class="table-responsive" style="max-height: calc(100vh - 150px); overflow-y: auto;">
+                        <!-- Таблица будет загружена сюда через JavaScript -->
+                    </div>
+                    <!-- Блок для баланса -->
+                    <div id="balanceMessage" class="mt-1 p-1 border rounded bg-white">
+                        <div class="row">
+                            <div id="col1" class="col-6"></div>
+                            <div id="col2" class="col-6"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+
+    // Функция обновления заголовка
+    function updateTitleWithZoneType(zoneType) {
+    const selectedDate = document.getElementById('analysisDate').value;
+    const formattedDate = formatDateForDisplay(selectedDate);
+    const zoneTypeName = zoneType === 'rep' ? 'Зоны ретуши' : 'Основные зоны';
+
+    document.getElementById('topMessage').textContent =
+        `Анализ движения автомобилей по ${zoneTypeName} ${formattedDate}`;
+}
+
+    function formatDateForDisplay(dateString) {
+        if (!dateString) return '{{ default_date }}';
+
+        const date = new Date(dateString);
+        const options = {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        };
+        return date.toLocaleDateString('ru-RU', options);
+    }
+
+    // Функция показа индикатора загрузки
+    function showLoading() {
+        document.getElementById('loadingIndicator').classList.remove('d-none');
+    }
+
+    // Функция скрытия индикатора загрузки
+    function hideLoading() {
+        document.getElementById('loadingIndicator').classList.add('d-none');
+    }
+
+    // Функция ручного анализа (с индикатором загрузки)
+    async function manualAnalyzeZones() {
+        showLoading();
+        await performAnalysis(true); // true — показывать индикатор
+    }
+
+    // Функция автоматического анализа (без индикатора)
+    async function autoAnalyzeZones() {
+        await performAnalysis(false); // false — не показывать индикатор
+    }
+
+
+    // функции для переключения:
+    let currentZoneType = 'main'; // Храним текущий тип зон
+
+    function switchZoneType(type) {
+    // Обновляем активный статус кнопок
+        document.getElementById('mainZonesBtn').classList.remove('active');
+        document.getElementById('repZonesBtn').classList.remove('active');
+
+        if (type === 'main') {
+            document.getElementById('mainZonesBtn').classList.add('active');
+            currentZoneType = 'main';
+        } else {
+            document.getElementById('repZonesBtn').classList.add('active');
+            currentZoneType = 'rep';
+        }
+
+    // Перезагружаем данные с новым типом зон
+    manualAnalyzeZones();
+}
+
+
+
+    // Общая функция для выполнения анализа с параметром отображения индикатора
+    async function performAnalysis(showIndicator) {
+        try {
+            if (showIndicator) {
+                showLoading();
+            }
+
+            const selectedDate = document.getElementById('analysisDate').value;
+            updateTitleWithZoneType(currentZoneType);
+            const url = `/analyze/?date=${selectedDate}&zone_type=${currentZoneType}`;
+
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            if (showIndicator) {
+                hideLoading();
+            }
+
+            if (result.success) {
+            displayResults(result.data, result.hours, result.balance);
+                // Обновляем заголовок в зависимости от типа зон
+                updateTitleWithZoneType(result.zone_type);
+            } else {
+                if (showIndicator) { // Показываем ошибку только при ручном обновлении
+                    showMessage('Ошибка анализа данных', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('Ошибка при анализе:', error);
+            if (showIndicator) {
+                hideLoading();
+                showMessage('Ошибка при анализе', 'error');
+            }
+        }
+    }
+
+
+    // Функция отображения результатов в виде таблицы Bootstrap
+    function displayResults(data, hours, balance) {
+    if (!data || data.length === 0) {
+        document.getElementById('resultContent').innerHTML =
+            '<div class="p-3 text-center text-muted">Нет данных для отображения</div>';
+        document.getElementById('balanceMessage').innerHTML = '';
+        return;
+    }
+
+    let html = '<table class="table table-striped table-hover table-sm mb-0">';
+    html += '<thead><tr><th scope="col">Зона/Час</th>';
+
+    hours.forEach(hour => {
+        html += `<th scope="col" class="text-center">${hour}:00</th>`;
+    });
+    html += '</tr></thead>';
+
+    // Каждая зона — отдельный tbody
+    data.forEach(zone => {
+        html += '<tbody>';
+        // Строка въезда
+        html += `<tr><th scope="row" class="fw-bold small">${zone.zone} (въезд)</th>`;
+        zone.entries.forEach(count => {
+            html += `<td class="text-center small">${count}</td>`;
+        });
+        html += '</tr>';
+
+        // Строка выезда
+        html += `<tr><th scope="row" class="fw-bold small">${zone.zone} (выезд)</th>`;
+        zone.exits.forEach(count => {
+            html += `<td class="text-center small">${count}</td>`;
+        });
+        html += '</tr>';
+        html += '</tbody>';
+    });
+
+    html += '</table>';
+    document.getElementById('resultContent').innerHTML = html;
+    
+    // Отображаем баланс
+    const balanceDiv = document.getElementById('balanceMessage');
+    const col1 = document.getElementById('col1');
+    const col2 = document.getElementById('col2');
+
+    if (balance && balance.trim()) {
+        // Разбиваем текст на строки
+        const lines = balance.split('\n');
+
+        // Очищаем колонки
+        col1.innerHTML = '';
+        col2.innerHTML = '';
+
+        // Первые 3 строки — в первую колонку
+        for (let i = 0; i < 3 && i < lines.length; i++) {
+            if (lines[i].trim()) { // Пропускаем пустые строки
+                col1.innerHTML += `<div class="small mb-1">${lines[i].trim()}</div>`;
+            }
+        }
+
+        // Следующие 3 строки — во вторую колонку
+        for (let i = 3; i < 6 && i < lines.length; i++) {
+            if (lines[i].trim()) { // Пропускаем пустые строки
+                col2.innerHTML += `<div class="small mb-1">${lines[i].trim()}</div>`;
+            }
+        }
+    } else {
+        balanceDiv.innerHTML = '';
+    }
+}
+
+    // Загрузка данных при загрузке страницы (с индикатором)
+    document.addEventListener('DOMContentLoaded', () => {
+        manualAnalyzeZones();
+    });
+
+    // Функция отображения сообщения об ошибке/успехе
+    function showMessage(msg, type) {
+        const div = document.getElementById('uploadMessage');
+        const alertClass = type === 'error' ? 'alert-danger' : 'alert-success';
+        div.innerHTML = `<div class="alert ${alertClass} alert-dismissible fade show small" role="alert">${msg}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
+
+
+        setTimeout(() => {
+            div.innerHTML = '';
+        }, 5000);
+    }
+
+    // Автообновление таблицы каждые 300 секунд (без индикатора)
+    const refreshInterval = 300000;
+    let refreshTimer = setInterval(autoAnalyzeZones, refreshInterval);
+
+</script>
+</body>
+</html>
