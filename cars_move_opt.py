@@ -1,9 +1,18 @@
+<<<<<<< HEAD
 from datetime import datetime
+=======
+import io
+import uvicorn
+import time
+import pandas as pd
+from datetime import datetime, timedelta
+>>>>>>> a_panel
 from fastapi import FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi import Request
+<<<<<<< HEAD
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import pandas as pd
@@ -14,13 +23,22 @@ import uvicorn
 import time
 
 # Импортируем функции работы с БД из database.py
+=======
+from pathlib import Path
+from pydantic import BaseModel
+from typing import List, Dict, Optional
+
+>>>>>>> a_panel
 from database import init_database, load_zones_from_db, save_zones_to_db
 
 
 app = FastAPI(title="Анализ движения автомобилей")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+<<<<<<< HEAD
 # Настройка шаблонов и статики
+=======
+>>>>>>> a_panel
 templates = Jinja2Templates(directory="templates")
 
 #Группы зон
@@ -180,6 +198,10 @@ def analyze_zones(date: str = Query(default="2026-06-09"), zone_type: str = Quer
             "exits": [zone_stat.exits.get(h, 0) for h in range(6, 24)]
             })
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> a_panel
     return {
         "success": True,
         "data": result,
