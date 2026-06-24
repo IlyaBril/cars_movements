@@ -1,26 +1,23 @@
-from datetime import datetime
+import io
+import uvicorn
+import time
+import pandas as pd
+from datetime import datetime, timedelta
 from fastapi import FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi import Request
+from pathlib import Path
 from pydantic import BaseModel
 from typing import List, Dict, Optional
-import pandas as pd
-from datetime import datetime, timedelta
-import io
-from pathlib import Path
-import uvicorn
-import time
 
-# Импортируем функции работы с БД из database.py
 from database import init_database, load_zones_from_db, save_zones_to_db
 
 
 app = FastAPI(title="Анализ движения автомобилей")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Настройка шаблонов и статики
 templates = Jinja2Templates(directory="templates")
 
 #Группы зон
@@ -65,7 +62,7 @@ def get_data(zone_type: str = "main") -> pd.DataFrame:
     """Парсинг Excel файла с данными c фильтрацией"""
 
     df = pd.read_excel(
-        'C:/Users/mv3120/Documents/Движение/Движение.xlsx',
+        'Движение.xlsx',
         sheet_name="Лист_1", nrows=200000,
         usecols=['Дата', 'Заказ', 'Точка регистрации'],
         )
@@ -179,6 +176,7 @@ def analyze_zones(date: str = Query(default="2026-06-09"), zone_type: str = Quer
             "entries": [zone_stat.entries.get(h, 0) for h in range(6, 24)],
             "exits": [zone_stat.exits.get(h, 0) for h in range(6, 24)]
             })
+
 
     return {
         "success": True,

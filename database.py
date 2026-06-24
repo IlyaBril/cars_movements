@@ -72,6 +72,7 @@ def load_zones_from_db() -> Tuple[List[str], List[str]]:
     """)
     row = cursor.fetchone()
     conn.close()
+	print('ow ', row)
 
     if row:
         return json.loads(row[0]), json.loads(row[1])
