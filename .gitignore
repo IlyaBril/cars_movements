@@ -8,6 +8,9 @@ log.txt
 # C extensions
 *.so
 
+.python-version
+zones.db
+
 # Distribution / packaging
 .Python
 build/

@@ -15,7 +15,7 @@ class DataService:
                 nrows=20000,
                 usecols=['Дата', 'Заказ', 'Точка регистрации'],
             )
-            
+
             # Проверка колонок
             required_columns = ['Дата', 'Заказ', 'Точка регистрации']
             if not all(col in df.columns for col in required_columns):
@@ -24,6 +24,7 @@ class DataService:
             df['Дата'] = pd.to_datetime(df['Дата'], format='%d.%m.%Y %H:%M:%S')
             return df
         except Exception as e:
+            
             raise ValueError(f"Ошибка при чтении файла: {str(e)}")
     
     @staticmethod
@@ -45,13 +46,17 @@ class DataService:
         df['exit_time'] = df.groupby('Заказ')['Дата'].shift(-1)
         df['hour'] = df['Дата'].dt.hour
         df['next_hour'] = df['exit_time'].dt.hour
-        print('current_zones ', current_zones, 'target_date', target_date)
+
+        # Удаление дублирующих зон
+        double_df = df[(df['Точка регистрации'] == df['next_zone'])]
+        df = df[(df['Точка регистрации'] != df['next_zone'])]
+
         # Въезд
         enter_df = df[
             (df['Точка регистрации'].isin(current_zones)) & 
             (df['Дата'].dt.date == target_date)
         ]
-        print('e ', enter_df)
+
         entries_pivot = pd.crosstab(
             enter_df['Точка регистрации'],
             enter_df['hour'],
@@ -94,5 +99,5 @@ class DataService:
                 entries=entries_hours,
                 exits=exits_hours
             ))
-        
+        print('result ', result)
         return result, balance_text

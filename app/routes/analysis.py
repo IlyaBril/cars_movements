@@ -30,11 +30,10 @@ def analyze_zones(
     zone_type: str = Query(default="main")
 ):
     """API для анализа зон"""
+    
     try:
         df = DataService.get_data()
-        
         stats, balance = DataService.calculate_statistics(df, date, zone_type)
-        print(stats, balance)
         result = []
         for zone_stat in stats:
             result.append({
