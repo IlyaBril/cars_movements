@@ -12,8 +12,8 @@ async def admin_page(request: Request):
     """Страница администрирования"""
     zones, zones_rep = ZoneService.get_zones()
     return templates.TemplateResponse(
-        "admin.html",
-        {
+        request=request, name="admin.html",
+        context={
             "request": request,
             "zones": zones,
             "zones_rep": zones_rep
