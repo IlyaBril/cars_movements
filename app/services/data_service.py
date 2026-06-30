@@ -54,6 +54,7 @@ class DataService:
                     all_entities.append(group_name)
                     print(f"✅ Добавлена группа: {group_name} ({len(group_zones)} зон)")
                 else:
+                    all_entities.append(group_name)
                     print(f"⚠️ Группа '{group_name}' пропущена. Отсутствуют зоны: {missing_zones}")
             
             # Создаем маппинг зона -> группа
@@ -70,8 +71,7 @@ class DataService:
             
             # Заменяем зоны на группы
             df_transformed['Точка регистрации'] = df_transformed['Точка регистрации'].map(
-                lambda x: zone_to_group.get(x, x))
-            
+                lambda x: zone_to_group.get(x, x))          
         
         # Перемещаем "ТиД" в начало если есть
         if "ТиД" in all_entities:
@@ -86,14 +86,21 @@ class DataService:
         df_transformed['next_zone'] = df_transformed.groupby('Заказ')['Точка регистрации'].shift(-1)
         df_transformed['exit_time'] = df_transformed.groupby('Заказ')['Дата'].shift(-1)
         
-        # Удаляем дублирующиеся записи с одинаковой зоной подряд
-        df_transformed = df_transformed[
-            df_transformed['Точка регистрации'] != df_transformed['next_zone']
-        ]
+        # Создаем маску удаляемых строк
+        mask = df_transformed['Точка регистрации'] == df_transformed['next_zone']
+
+        # Для строк, следующих за удаляемыми, заменяем время на время из удаляемой строки
+        df_transformed.loc[mask.shift(1).fillna(False), 'Дата'] = df_transformed.loc[mask, 'Дата'].values
+
+        # Удаляем дубликаты
+        df_transformed = df_transformed[~mask]
+        
         
         # Добавляем часы
         df_transformed['hour'] = df_transformed['Дата'].dt.hour
         df_transformed['next_hour'] = df_transformed['exit_time'].dt.hour
+        
+        #df_transformed.to_excel('output.xlsx')
         
         # Для расчета используем ТОЛЬКО те сущности, которые есть в данных
         # и которые соответствуют текущему типу зон
