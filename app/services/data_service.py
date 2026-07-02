@@ -45,13 +45,12 @@ class DataService:
                         zone_to_group[zone] = group_name
                     print(f"✅ Добавлена группа: {group_name}")
                 else:
+                    for zone in group_zones:
+                        zone_to_group[zone] = group_name
                     missing = [z for z in group_zones if z not in all_available_zones]
                     print(f"⚠️ Группа '{group_name}' пропущена. Отсутствуют зоны: {missing}")
             
-            # Перемещаем "ТиД" в начало
-            if "ТиД" in all_entities:
-                all_entities.remove("ТиД")
-                all_entities.insert(1, "ТиД")
+            print("zone_to_group ", zone_to_group)
         
         return zones, zones_rep, zone_to_group, all_entities
 
@@ -79,6 +78,8 @@ class DataService:
         # Добавляем часы
         df_transformed['hour'] = df_transformed['Дата'].dt.hour
         df_transformed['next_hour'] = df_transformed['exit_time'].dt.hour
+
+        #df_transformed.to_excel("C:/Users/mv3120/Documents/Движение/output.xlsx")
         
         return df_transformed
 
