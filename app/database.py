@@ -169,12 +169,22 @@ def save_zones_to_db(zones_list: List[str], zones_rep_list: List[str]) -> None:
     conn.close()
 
 
-def load_groups_from_db() -> Dict[str, List[str]]:
+def load_groups_from_db(zones=None) -> Dict[str, List[str]]:
     """Загрузка групп из базы данных"""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT group_name, zones FROM zone_groups ORDER BY group_name")
+    if zones:
+        placeholders = ', '.join(['?' for _ in zones])
+        print(placeholders)
+        
+        query = f"SELECT group_name, zones FROM zone_groups WHERE group_name IN ({placeholders}) ORDER BY group_name"
+        cursor.execute(query, zones)
+    else:
+        query = f"SELECT group_name, zones FROM zone_groups ORDER BY group_name"
+        cursor.execute(query)
+    
     rows = cursor.fetchall()
+    print('rows ', rows)
     conn.close()
     
     groups = {}
@@ -229,22 +239,21 @@ def delete_group_from_db(group_name: str) -> bool:
 
 def get_all_zones_from_db() -> List[str]:
     """Получение всех зон из конфигурации"""
-    zones, zones_rep = load_zones_from_db()
-    # Объединяем и удаляем дубликаты
-    all_zones = zones + zones_rep
-    # Удаляем дубликаты, сохраняя порядок
-    seen = set()
-    result = []
-    for zone in all_zones:
-        if zone not in seen:
-            seen.add(zone)
-            result.append(zone)
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    query = f"SELECT DISTINCT (`Точка регистрации`) FROM movements ORDER BY (`Точка регистрации`)"
+    cursor.execute(query)
+    result = cursor.fetchall()
+    print('get_all_zones_from_db rows ', result)
+    conn.close()
+   
     return result
 
 
 def get_available_zones_for_groups() -> List[str]:
     """Получение зон, которые еще не входят ни в одну группу"""
     all_zones = get_all_zones_from_db()
+    
     groups = load_groups_from_db()
     
     # Собираем все зоны, которые уже в группах
