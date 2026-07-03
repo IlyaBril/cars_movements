@@ -14,3 +14,10 @@ class AnalysisResponse(BaseModel):
 class ZoneUpdateRequest(BaseModel):
     zones: List[str]
     zones_rep: List[str]
+
+class GroupUpdateRequest(BaseModel):
+    groups: Dict[str, List[str]]  # {group_name: [zone1, zone2, ...]}
+
+class GroupCreateRequest(BaseModel):
+    name: str
+    zones: List[str]

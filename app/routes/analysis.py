@@ -18,7 +18,7 @@ def root(request: Request):
     
     date = default_date()
     
-    return templates.TemplateResponse(
+    return templates.TemplateResponse(  
         request=request, name="index(bootstrap).html",
         context={"default_date": date},
         )

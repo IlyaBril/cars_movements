@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Админ‑панель — Управление группами</title>
+    <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
+    <style>
+        .zone-checkbox {
+            margin-right: 10px;
+        }
+        .group-card {
+            border-left: 4px solid #0d6efd;
+            margin-bottom: 10px;
+        }
+        .group-card .card-header {
+            background-color: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .group-zones {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        .group-zones .badge {
+            font-size: 0.75rem;
+        }
+        .selected-zones {
+            background-color: #e7f3ff;
+            padding: 10px;
+            border-radius: 4px;
+            min-height: 40px;
+        }
+        .zone-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .zone-count {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+        .empty-state {
+            padding: 20px;
+            text-align: center;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h4">Управление группами зон</h1>
+            <div>
+                <a href="/admin/" class="btn btn-outline-secondary btn-sm">← Назад к зонам</a>
+                <a href="/" class="btn btn-outline-primary btn-sm">Главная</a>
+            </div>
+        </div>
+
+        <!-- Форма создания группы -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Создать новую группу</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="groupName" class="form-label">Название группы</label>
+                    <input type="text" class="form-control" id="groupName" placeholder="Например: ТиД">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">
+                        Выберите зоны для группы
+                        <span class="zone-count">(доступно: {{ available_zones|length }})</span>
+                    </label>
+                    <div class="border p-3 rounded zone-list">
+                        {% if available_zones %}
+                            {% for zone in available_zones %}
+                            <div class="form-check">
+                                <input class="form-check-input zone-checkbox" type="checkbox" value="{{ zone }}" id="zone_{{ loop.index }}">
+                                <label class="form-check-label" for="zone_{{ loop.index }}">
+                                    {{ zone }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <p class="mb-1">Нет доступных зон для создания групп.</p>
+                                <small class="text-muted">
+                                    {% if groups %}
+                                        Все зоны из данных уже распределены по группам.
+                                    {% else %}
+                                        Сначала загрузите данные через /load-data или добавьте зоны в админ-панели.
+                                    {% endif %}
+                                </small>
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% if available_zones %}
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAllZones()">Выбрать все</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllZones()">Снять все</button>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Выбранные зоны:</label>
+                    <div id="selectedZonesDisplay" class="selected-zones">
+                        <span class="text-muted">Ничего не выбрано</span>
+                    </div>
+                </div>
+                
+                <button type="button" class="btn btn-primary" onclick="createGroup()">Сохранить группу</button>
+            </div>
+        </div>
+
+        <!-- Список существующих групп -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Существующие группы ({{ groups|length }})</h5>
+            </div>
+            <div class="card-body">
+                <div id="groupsList">
+                    {% if groups %}
+                        {% for group_name, zones in groups.items() %}
+                        <div class="card group-card">
+                            <div class="card-header">
+                                <strong>{{ group_name }}</strong>
+                                <div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="editGroup('{{ group_name }}')">Редактировать</button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteGroup('{{ group_name }}')">Удалить</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="group-zones">
+                                    {% for zone in zones %}
+                                    <span class="badge bg-secondary">{{ zone }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted py-3">
+                            Нет созданных групп
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Сообщения -->
+        <div id="message" class="mt-3"></div>
+    </div>
+
+    <script>
+        // Данные групп из Python
+        const groupsData = {{ groups_json|safe }};
+        
+        // Обновление отображения выбранных зон
+        document.addEventListener('DOMContentLoaded', function() {
+            const checkboxes = document.querySelectorAll('.zone-checkbox');
+            checkboxes.forEach(function(checkbox) {
+                checkbox.addEventListener('change', updateSelectedZones);
+            });
+            
+            updateSelectedZones();
+        });
+
+        function updateSelectedZones() {
+            const checkboxes = document.querySelectorAll('.zone-checkbox:checked');
+            const selected = Array.from(checkboxes).map(cb => cb.value);
+            
+            const display = document.getElementById('selectedZonesDisplay');
+            if (selected.length === 0) {
+                display.innerHTML = '<span class="text-muted">Ничего не выбрано</span>';
+            } else {
+                display.innerHTML = selected.map(z => 
+                    `<span class="badge bg-primary me-1">${z}</span>`
+                ).join('');
+            }
+        }
+
+        function selectAllZones() {
+            document.querySelectorAll('.zone-checkbox').forEach(function(cb) {
+                cb.checked = true;
+            });
+            updateSelectedZones();
+        }
+
+        function deselectAllZones() {
+            document.querySelectorAll('.zone-checkbox').forEach(function(cb) {
+                cb.checked = false;
+            });
+            updateSelectedZones();
+        }
+
+        function showMessage(msg, type) {
+            const div = document.getElementById('message');
+            const alertClass = type === 'error' ? 'alert-danger' : 'alert-success';
+            div.innerHTML = `<div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+                ${msg}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>`;
+            setTimeout(() => {
+                div.innerHTML = '';
+            }, 5000);
+        }
+
+        async function createGroup() {
+            const groupName = document.getElementById('groupName').value.trim();
+            if (!groupName) {
+                showMessage('Введите название группы', 'error');
+                return;
+            }
+
+            const checkboxes = document.querySelectorAll('.zone-checkbox:checked');
+            const selectedZones = Array.from(checkboxes).map(cb => cb.value);
+
+            if (selectedZones.length === 0) {
+                showMessage('Выберите хотя бы одну зону', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/admin/groups/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        group_name: groupName,
+                        zones: selectedZones
+                    })
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    showMessage(result.message, 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showMessage(result.detail || 'Ошибка при сохранении', 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage('Ошибка соединения с сервером', 'error');
+            }
+        }
+
+        async function deleteGroup(groupName) {
+            if (!confirm(`Удалить группу "${groupName}"?`)) return;
+
+            try {
+                const response = await fetch(`/admin/groups/${encodeURIComponent(groupName)}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                if (response.ok) {
+                    showMessage(result.message, 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showMessage(result.detail || 'Ошибка при удалении', 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage('Ошибка соединения с сервером', 'error');
+            }
+        }
+
+        function editGroup(groupName) {
+            const zones = groupsData[groupName];
+            
+            if (zones && zones.length > 0) {
+                document.getElementById('groupName').value = groupName;
+                
+                document.querySelectorAll('.zone-checkbox').forEach(function(cb) {
+                    cb.checked = zones.includes(cb.value);
+                });
+                updateSelectedZones();
+                
+                document.querySelector('.card:first-child').scrollIntoView({ behavior: 'smooth' });
+                showMessage(`Группа "${groupName}" загружена для редактирования`, 'success');
+            } else {
+                showMessage('Группа не найдена', 'error');
+            }
+        }
+    </script>
+</body>
+</html>

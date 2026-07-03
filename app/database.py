@@ -6,6 +6,7 @@ from typing import List, Tuple
 from pathlib import Path
 from app.config import DB_FILE, DEFAULT_ZONES, DEFAULT_ZONES_REP
 
+
 def init_database() -> None:
     """Инициализация базы данных"""
     conn = sqlite3.connect(DB_FILE)
@@ -41,6 +42,19 @@ def init_database() -> None:
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+
+    # Таблица для групп зон
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS zone_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_name TEXT NOT NULL UNIQUE,
+            zones TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+
     
     # Добавляем начальные данные, если таблица пуста
     cursor.execute("SELECT COUNT(*) FROM zones_config")
@@ -55,6 +69,7 @@ def init_database() -> None:
     
     conn.commit()
     conn.close()
+
 	
 def load_excel_to_db(excel_path: str = "Движение.xlsx"):
     """Загрузка данных из Excel в SQLite"""
@@ -102,9 +117,11 @@ def load_excel_to_db(excel_path: str = "Движение.xlsx"):
         print(f"❌ Ошибка загрузки: {e}")
         return False
 
+
 def get_db_connection():
     """Получить соединение с БД"""
     return sqlite3.connect(DB_FILE)
+
 
 def get_last_update():
     """Получить время последнего обновления"""
@@ -114,6 +131,7 @@ def get_last_update():
     result = cursor.fetchone()
     conn.close()
     return result[0] if result else None
+
 
 def load_zones_from_db() -> Tuple[List[str], List[str]]:
     """Загрузка зон из базы данных"""
@@ -132,6 +150,7 @@ def load_zones_from_db() -> Tuple[List[str], List[str]]:
         return json.loads(row[0]), json.loads(row[1])
     return DEFAULT_ZONES.copy(), DEFAULT_ZONES_REP.copy()
 
+
 def save_zones_to_db(zones_list: List[str], zones_rep_list: List[str]) -> None:
     """Сохранение зон в базу данных"""
     conn = sqlite3.connect(DB_FILE)
@@ -148,3 +167,91 @@ def save_zones_to_db(zones_list: List[str], zones_rep_list: List[str]) -> None:
     
     conn.commit()
     conn.close()
+
+
+def load_groups_from_db() -> Dict[str, List[str]]:
+    """Загрузка групп из базы данных"""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT group_name, zones FROM zone_groups ORDER BY group_name")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    groups = {}
+    for group_name, zones_json in rows:
+        groups[group_name] = json.loads(zones_json)
+    return groups
+
+
+def save_group_to_db(group_name: str, zones: List[str]) -> bool:
+    """Сохранение группы в базу данных"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # Проверяем, существует ли группа
+        cursor.execute("SELECT group_name FROM zone_groups WHERE group_name = ?", (group_name,))
+        if cursor.fetchone():
+            # Обновляем существующую группу
+            cursor.execute("""
+                UPDATE zone_groups 
+                SET zones = ?, created_at = CURRENT_TIMESTAMP
+                WHERE group_name = ?
+            """, (json.dumps(zones, ensure_ascii=False), group_name))
+        else:
+            # Создаем новую группу
+            cursor.execute("""
+                INSERT INTO zone_groups (group_name, zones)
+                VALUES (?, ?)
+            """, (group_name, json.dumps(zones, ensure_ascii=False)))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Ошибка сохранения группы: {e}")
+        return False
+
+
+def delete_group_from_db(group_name: str) -> bool:
+    """Удаление группы из базы данных"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM zone_groups WHERE group_name = ?", (group_name,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Ошибка удаления группы: {e}")
+        return False
+
+
+def get_all_zones_from_db() -> List[str]:
+    """Получение всех зон из конфигурации"""
+    zones, zones_rep = load_zones_from_db()
+    # Объединяем и удаляем дубликаты
+    all_zones = zones + zones_rep
+    # Удаляем дубликаты, сохраняя порядок
+    seen = set()
+    result = []
+    for zone in all_zones:
+        if zone not in seen:
+            seen.add(zone)
+            result.append(zone)
+    return result
+
+
+def get_available_zones_for_groups() -> List[str]:
+    """Получение зон, которые еще не входят ни в одну группу"""
+    all_zones = get_all_zones_from_db()
+    groups = load_groups_from_db()
+    
+    # Собираем все зоны, которые уже в группах
+    used_zones = set()
+    for zones in groups.values():
+        used_zones.update(zones)
+    
+    # Возвращаем только свободные зоны
+    available = [zone for zone in all_zones if zone not in used_zones]
+    return available

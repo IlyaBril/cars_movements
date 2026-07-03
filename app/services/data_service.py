@@ -1,10 +1,9 @@
 import pandas as pd
-from datetime import datetime
-from typing import List, Tuple
+from datetime import datetime, date
+from typing import List, Tuple, Dict
 from app.models import ZoneStats
 from app.services.zone_service import ZoneService
-from app.config import MAIN_ZONE_GROUPS
-from app.database import get_db_connection
+from app.database import load_groups_from_db, get_db_connection
 
 class DataService:
     @staticmethod
@@ -23,11 +22,11 @@ class DataService:
         except Exception as e:
             raise ValueError(f"Ошибка при чтении данных: {str(e)}")
 
-    
     @staticmethod
-    def _prepare_zones_and_mapping(zone_type: str) -> Tuple[List[str], List[str], Dict[str, str]]:
+    def _prepare_zones_and_mapping(zone_type: str) -> Tuple[List[str], List[str], Dict[str, str], List[str]]:
         """Подготовка списков зон и маппинга"""
         zones, zones_rep = ZoneService.get_zones()
+        groups = load_groups_from_db()
         
         if zone_type == "rep":
             all_entities = zones_rep.copy()
@@ -36,21 +35,19 @@ class DataService:
             all_available_zones = zones + zones_rep
             all_entities = zones.copy()
             
-            # Добавляем группы
             zone_to_group = {}
-            for group_name, group_zones in MAIN_ZONE_GROUPS.items():
+            for group_name, group_zones in groups.items():
+                # Проверяем, все ли зоны группы существуют
                 if all(zone in all_available_zones for zone in group_zones):
                     all_entities.append(group_name)
                     for zone in group_zones:
                         zone_to_group[zone] = group_name
                     print(f"✅ Добавлена группа: {group_name}")
                 else:
-                    for zone in group_zones:
-                        zone_to_group[zone] = group_name
                     missing = [z for z in group_zones if z not in all_available_zones]
                     print(f"⚠️ Группа '{group_name}' пропущена. Отсутствуют зоны: {missing}")
             
-            print("zone_to_group ", zone_to_group)
+            print(f"Группы для замены: {zone_to_group}")
         
         return zones, zones_rep, zone_to_group, all_entities
 
@@ -59,7 +56,7 @@ class DataService:
         """Трансформация DataFrame: замена зон на группы и обработка дубликатов"""
         df_transformed = df.copy()
         
-        # Заменяем зоны на группы если есть маппинг
+        # Заменяем зоны на группы
         if zone_to_group:
             df_transformed['Точка регистрации'] = df_transformed['Точка регистрации'].map(
                 lambda x: zone_to_group.get(x, x)
@@ -78,8 +75,6 @@ class DataService:
         # Добавляем часы
         df_transformed['hour'] = df_transformed['Дата'].dt.hour
         df_transformed['next_hour'] = df_transformed['exit_time'].dt.hour
-
-        #df_transformed.to_excel("C:/Users/mv3120/Documents/Движение/output.xlsx")
         
         return df_transformed
 
@@ -92,7 +87,14 @@ class DataService:
             enter_df['Точка регистрации'],
             enter_df['hour'],
             dropna=False
-        ).reindex(columns=range(6, 24), fill_value=0, index=all_entities)
+        ).reindex(columns=range(6, 24), fill_value=0)
+        
+        # Добавляем все сущности, даже если их нет в данных
+        for entity in all_entities:
+            if entity not in entries_pivot.index:
+                entries_pivot.loc[entity] = [0] * 18
+        
+        entries_pivot = entries_pivot.reindex(all_entities)
         
         # Выезды
         exit_df = df[df['exit_time'].dt.date == target_date]
@@ -100,7 +102,13 @@ class DataService:
             exit_df['Точка регистрации'],
             exit_df['next_hour'],
             dropna=False
-        ).reindex(columns=range(6, 24), fill_value=0, index=all_entities)
+        ).reindex(columns=range(6, 24), fill_value=0)
+        
+        for entity in all_entities:
+            if entity not in exits_pivot.index:
+                exits_pivot.loc[entity] = [0] * 18
+        
+        exits_pivot = exits_pivot.reindex(all_entities)
         
         return entries_pivot, exits_pivot
 
@@ -111,17 +119,29 @@ class DataService:
         result = []
         balance_messages = []
         
+        groups = load_groups_from_db()
+        
         for entity in all_entities:
             # Получаем данные по часам
-            entries_hours = {hour: int(entries_pivot.loc[entity, hour]) for hour in range(6, 24)} if entity in entries_pivot.index else {hour: 0 for hour in range(6, 24)}
-            exits_hours = {hour: int(exits_pivot.loc[entity, hour]) for hour in range(6, 24)} if entity in exits_pivot.index else {hour: 0 for hour in range(6, 24)}
+            entries_hours = {}
+            exits_hours = {}
+            
+            for hour in range(6, 24):
+                entries_hours[hour] = int(entries_pivot.loc[entity, hour]) if entity in entries_pivot.index else 0
+                exits_hours[hour] = int(exits_pivot.loc[entity, hour]) if entity in exits_pivot.index else 0
             
             total_entries = sum(entries_hours.values())
             total_exits = sum(exits_hours.values())
             balance = total_entries - total_exits
             
             # Определяем тип сущности
-            prefix = "📍 Зона (ремонт)" if zone_type == "rep" else ("📊 Группа" if entity in MAIN_ZONE_GROUPS else "📍 Зона")
+            if zone_type == "rep":
+                prefix = "📍 Зона (ремонт)"
+            elif entity in groups:
+                prefix = "📊 Группа"
+            else:
+                prefix = "📍 Зона"
+            
             balance_messages.append(f"{prefix} {entity}: въехало={total_entries}, выехало={total_exits}, разница={balance}")
             
             result.append(ZoneStats(
@@ -149,4 +169,3 @@ class DataService:
         
         # 4. Формирование результата
         return DataService._build_result(entries_pivot, exits_pivot, all_entities, zone_type)
-
