@@ -154,138 +154,163 @@
         <div id="message" class="mt-3"></div>
     </div>
 
-    <script>
-        // Данные групп из Python
-        const groupsData = {{ groups_json|safe }};
-        
-        // Обновление отображения выбранных зон
-        document.addEventListener('DOMContentLoaded', function() {
-            const checkboxes = document.querySelectorAll('.zone-checkbox');
-            checkboxes.forEach(function(checkbox) {
-                checkbox.addEventListener('change', updateSelectedZones);
-            });
-            
-            updateSelectedZones();
+<script>
+    // Данные групп из Python
+    const groupsData = {{ groups_json|safe }};
+    let editingGroupName = null; // Переменная для хранения имени редактируемой группы
+    
+    // Обновление отображения выбранных зон
+    document.addEventListener('DOMContentLoaded', function() {
+        const checkboxes = document.querySelectorAll('.zone-checkbox');
+        checkboxes.forEach(function(checkbox) {
+            checkbox.addEventListener('change', updateSelectedZones);
         });
+        
+        updateSelectedZones();
+    });
 
-        function updateSelectedZones() {
-            const checkboxes = document.querySelectorAll('.zone-checkbox:checked');
-            const selected = Array.from(checkboxes).map(cb => cb.value);
-            
-            const display = document.getElementById('selectedZonesDisplay');
-            if (selected.length === 0) {
-                display.innerHTML = '<span class="text-muted">Ничего не выбрано</span>';
+    function updateSelectedZones() {
+        const checkboxes = document.querySelectorAll('.zone-checkbox:checked');
+        const selected = Array.from(checkboxes).map(cb => cb.value);
+        
+        const display = document.getElementById('selectedZonesDisplay');
+        if (selected.length === 0) {
+            display.innerHTML = '<span class="text-muted">Ничего не выбрано</span>';
+        } else {
+            display.innerHTML = selected.map(z => 
+                `<span class="badge bg-primary me-1">${z}</span>`
+            ).join('');
+        }
+    }
+
+    function selectAllZones() {
+        document.querySelectorAll('.zone-checkbox').forEach(function(cb) {
+            cb.checked = true;
+        });
+        updateSelectedZones();
+    }
+
+    function deselectAllZones() {
+        document.querySelectorAll('.zone-checkbox').forEach(function(cb) {
+            cb.checked = false;
+        });
+        updateSelectedZones();
+    }
+
+    function showMessage(msg, type) {
+        const div = document.getElementById('message');
+        const alertClass = type === 'error' ? 'alert-danger' : 'alert-success';
+        div.innerHTML = `<div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            ${msg}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+        setTimeout(() => {
+            div.innerHTML = '';
+        }, 5000);
+    }
+
+    async function createGroup() {
+        const groupName = document.getElementById('groupName').value.trim();
+        if (!groupName) {
+            showMessage('Введите название группы', 'error');
+            return;
+        }
+
+        const checkboxes = document.querySelectorAll('.zone-checkbox:checked');
+        const selectedZones = Array.from(checkboxes).map(cb => cb.value);
+
+        if (selectedZones.length === 0) {
+            showMessage('Выберите хотя бы одну зону', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/admin/groups/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    group_name: groupName,
+                    zones: selectedZones
+                })
+            });
+
+            const result = await response.json();
+            if (response.ok) {
+                showMessage(result.message, 'success');
+                setTimeout(() => location.reload(), 1500);
             } else {
-                display.innerHTML = selected.map(z => 
-                    `<span class="badge bg-primary me-1">${z}</span>`
-                ).join('');
+                showMessage(result.detail || 'Ошибка при сохранении', 'error');
             }
+        } catch (error) {
+            console.error('Error:', error);
+            showMessage('Ошибка соединения с сервером', 'error');
         }
+    }
 
-        function selectAllZones() {
-            document.querySelectorAll('.zone-checkbox').forEach(function(cb) {
-                cb.checked = true;
+    async function deleteGroup(groupName) {
+        if (!confirm(`Удалить группу "${groupName}"?`)) return;
+
+        try {
+            const response = await fetch(`/admin/groups/${encodeURIComponent(groupName)}`, {
+                method: 'DELETE'
             });
-            updateSelectedZones();
-        }
 
-        function deselectAllZones() {
-            document.querySelectorAll('.zone-checkbox').forEach(function(cb) {
-                cb.checked = false;
-            });
-            updateSelectedZones();
+            const result = await response.json();
+            if (response.ok) {
+                showMessage(result.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showMessage(result.detail || 'Ошибка при удалении', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showMessage('Ошибка соединения с сервером', 'error');
         }
+    }
 
-        function showMessage(msg, type) {
-            const div = document.getElementById('message');
-            const alertClass = type === 'error' ? 'alert-danger' : 'alert-success';
-            div.innerHTML = `<div class="alert ${alertClass} alert-dismissible fade show" role="alert">
-                ${msg}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>`;
-            setTimeout(() => {
-                div.innerHTML = '';
-            }, 5000);
-        }
-
-        async function createGroup() {
-            const groupName = document.getElementById('groupName').value.trim();
-            if (!groupName) {
-                showMessage('Введите название группы', 'error');
+async function editGroup(groupName) {
+        try {
+            // Получаем данные для редактирования
+            const response = await fetch(`/admin/groups/edit/${encodeURIComponent(groupName)}`);
+            const data = await response.json();
+            
+            if (!response.ok) {
+                showMessage('Ошибка загрузки данных', 'error');
                 return;
             }
-
-            const checkboxes = document.querySelectorAll('.zone-checkbox:checked');
-            const selectedZones = Array.from(checkboxes).map(cb => cb.value);
-
-            if (selectedZones.length === 0) {
-                showMessage('Выберите хотя бы одну зону', 'error');
-                return;
-            }
-
-            try {
-                const response = await fetch('/admin/groups/create', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        group_name: groupName,
-                        zones: selectedZones
-                    })
-                });
-
-                const result = await response.json();
-                if (response.ok) {
-                    showMessage(result.message, 'success');
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    showMessage(result.detail || 'Ошибка при сохранении', 'error');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showMessage('Ошибка соединения с сервером', 'error');
-            }
-        }
-
-        async function deleteGroup(groupName) {
-            if (!confirm(`Удалить группу "${groupName}"?`)) return;
-
-            try {
-                const response = await fetch(`/admin/groups/${encodeURIComponent(groupName)}`, {
-                    method: 'DELETE'
-                });
-
-                const result = await response.json();
-                if (response.ok) {
-                    showMessage(result.message, 'success');
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    showMessage(result.detail || 'Ошибка при удалении', 'error');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showMessage('Ошибка соединения с сервером', 'error');
-            }
-        }
-
-        function editGroup(groupName) {
-            const zones = groupsData[groupName];
             
-            if (zones && zones.length > 0) {
-                document.getElementById('groupName').value = groupName;
-                
-                document.querySelectorAll('.zone-checkbox').forEach(function(cb) {
-                    cb.checked = zones.includes(cb.value);
-                });
-                updateSelectedZones();
-                
-                document.querySelector('.card:first-child').scrollIntoView({ behavior: 'smooth' });
-                showMessage(`Группа "${groupName}" загружена для редактирования`, 'success');
-            } else {
-                showMessage('Группа не найдена', 'error');
-            }
+            // Загружаем название группы
+            document.getElementById('groupName').value = groupName;
+            
+            // Обновляем список зон
+            const zoneList = document.querySelector('.zone-list');
+            zoneList.innerHTML = data.available_zones.map((zone, index) => `
+                <div class="form-check">
+                    <input class="form-check-input zone-checkbox" type="checkbox" value="${zone}" id="zone_${index}" 
+                           ${data.current_zones.includes(zone) ? 'checked' : ''}>
+                    <label class="form-check-label" for="zone_${index}">${zone}</label>
+                </div>
+            `).join('');
+            
+            // Обновляем счетчик
+            document.querySelector('.zone-count').textContent = `(доступно: ${data.available_zones.length})`;
+            
+            // Обновляем отображение выбранных зон
+            document.querySelectorAll('.zone-checkbox').forEach(cb => {
+                cb.addEventListener('change', updateSelectedZones);
+            });
+            updateSelectedZones();
+            
+            // Показываем сообщение
+            showMessage(`Редактирование группы "${groupName}"`, 'success');
+            document.querySelector('.card:first-child').scrollIntoView({ behavior: 'smooth' });
+            
+        } catch (error) {
+            showMessage('Ошибка при загрузке данных', 'error');
         }
-    </script>
+    }
+</script>
 </body>
 </html>

@@ -251,17 +251,21 @@ def get_all_zones_from_db() -> List[str]:
     return flat_list
 
 
-def get_available_zones_for_groups() -> List[str]:
-    """Получение зон, которые еще не входят ни в одну группу"""
+def get_available_zones_for_groups(editing_group: str = None) -> List[str]:
+    """Получение зон для отображения в форме"""
     all_zones = get_all_zones_from_db()
-    
     groups = load_groups_from_db()
-    
-    # Собираем все зоны, которые уже в группах
+
     used_zones = set()
     for zones in groups.values():
         used_zones.update(zones)
     
-    # Возвращаем только свободные зоны
-    available = [zone for zone in all_zones if zone not in used_zones]
-    return available
+    available_zones = [zone for zone in all_zones if zone not in used_zones]
+    
+    # Если редактируем группу - добавляем её зоны в список доступных
+    if editing_group and editing_group in groups:
+        editing_zones = set(groups[editing_group])
+        # Все зоны + зоны из редактируемой группы (убираем дубли)
+        return sorted(list(set(available_zones + list(editing_zones))))
+    
+    return available_zones

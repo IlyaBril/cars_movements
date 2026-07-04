@@ -8,7 +8,8 @@ from app.database import (
     get_available_zones_for_groups,
     load_groups_from_db, 
     save_group_to_db,
-    delete_group_from_db
+    delete_group_from_db,
+    get_all_zones_from_db,
 )
 
 router = APIRouter(prefix="/admin/groups", tags=["admin"])
@@ -21,12 +22,12 @@ class GroupCreateRequest(BaseModel):
 @router.get("/", response_class=HTMLResponse)
 async def groups_page(request: Request):
     """Страница управления группами"""
-    # Получаем доступные зоны из данных
-    available_zones = get_available_zones_for_groups()
+    # Получаем все зоны для отображения (включая занятые)
+    all_zones = available_zones = get_available_zones_for_groups()
     groups = load_groups_from_db()
     
     # Для отладки
-    print(f"Доступные зоны для групп: {available_zones}")
+    print(f"Все зоны: {all_zones}")
     print(f"Существующие группы: {groups}")
     
     return templates.TemplateResponse(
@@ -34,11 +35,29 @@ async def groups_page(request: Request):
         name="admin_groups.html",
         context={
             "request": request,
-            "available_zones": available_zones,
+            "available_zones": all_zones,  # Передаем все зоны
             "groups": groups,
             "groups_json": json.dumps(groups)
         }
     )
+
+
+@router.get("/edit/{group_name}")
+async def get_edit_data(group_name: str):
+    """Данные для редактирования группы"""
+    groups = load_groups_from_db()
+    if group_name not in groups:
+        raise HTTPException(status_code=404, detail="Группа не найдена")
+    
+    # Получаем доступные зоны (включая зоны редактируемой группы)
+    available_zones = get_available_zones_for_groups(editing_group=group_name)
+    print('get_edit_data available_zones', available_zones)
+    print('get_edit_data current_zones', groups[group_name])
+    return {
+        "available_zones": available_zones,
+        "current_zones": groups[group_name]
+    }
+
 
 @router.post("/create")
 async def create_group(request: GroupCreateRequest):
@@ -70,6 +89,7 @@ async def create_group(request: GroupCreateRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.delete("/{group_name}")
 async def delete_group(group_name: str):
