@@ -243,11 +243,12 @@ def get_all_zones_from_db() -> List[str]:
     cursor = conn.cursor()
     query = f"SELECT DISTINCT (`Точка регистрации`) FROM movements ORDER BY (`Точка регистрации`)"
     cursor.execute(query)
-    result = cursor.fetchall()
-    print('get_all_zones_from_db rows ', result)
+    rows = cursor.fetchall()
+    flat_list = [row[0] for row in rows]
+    print('get_all_zones_from_db rows ', flat_list)
     conn.close()
    
-    return result
+    return flat_list
 
 
 def get_available_zones_for_groups() -> List[str]:

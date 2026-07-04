@@ -42,7 +42,7 @@ class DataService:
         groups = load_groups_from_db(all_entities)
         logger.info(f"load_groups_from_db {groups}")
         all_available_zones = df['Точка регистрации'].unique()
-
+        logger.info(f"all_available_zones {all_available_zones}")
         zone_to_group = {}           
         
         for group_name, group_zones in groups.items():
