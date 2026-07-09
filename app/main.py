@@ -1,14 +1,26 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
+
+from .db.database import init_sqlite_database, init_postgres_database
+from .db.repository import MovementRepository, GroupRepository
+from .db.models import Base
 from .config import STATIC_DIR
-from .database import init_database
 from .routes import analysis, admin, admin_groups
 
 
-# Инициализация базы данных
-init_database()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Инициализация баз данных при старте
+    init_sqlite_database()
+    init_postgres_database()
+    yield
+    # Очистка при завершении
+    pass
 
-app = FastAPI(title="Анализ движения автомобилей")
+app = FastAPI(lifespan=lifespan, title="movements")
+# Инициализация базы данных
+
 
 # Монтирование статических файлов
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

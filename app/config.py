@@ -18,6 +18,9 @@ POSTGRES_PASSWORD = "your_password"
 # Настройки подключения
 POSTGRES_DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
 
+#Настройки сессий БД зон и данных
+
+
 # Значения по умолчанию
 DEFAULT_ZONES = [
     'M440. GRT',

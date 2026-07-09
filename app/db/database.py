@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.pool import StaticPool
 from app.config import DB_FILE
-from app.models import Base
+from .models import Base
 
 
 # SQLite база данных (для групп и конфигурации)

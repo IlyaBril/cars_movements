@@ -1,9 +1,37 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, TIMESTAMP, func
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
+from pydantic import BaseModel
 
 
 Base = declarative_base()
+
+
+class ZoneStats(BaseModel):
+    zone_name: str
+    entries: Dict[int, int]
+    exits: Dict[int, int]
+
+
+class AnalysisResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[List[ZoneStats]] = None
+    
+
+class ZoneUpdateRequest(BaseModel):
+    zones: List[str]
+    zones_rep: List[str]
+    
+
+class GroupUpdateRequest(BaseModel):
+    groups: Dict[str, List[str]]  # {group_name: [zone1, zone2, ...]}
+    
+
+class GroupCreateRequest(BaseModel):
+    name: str
+    zones: List[str]
+
 
 class Movement(Base):
     __tablename__ = 'movements'

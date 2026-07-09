@@ -4,20 +4,33 @@ from datetime import datetime
 from typing import List, Tuple, Dict, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.models import Movement, Metadata, ZonesConfig, ZoneGroup
-from app.database import SQLiteSession, PostgresSession
+from .models import Movement, Metadata, ZonesConfig, ZoneGroup
+from .database import SQLiteSession, PostgresSession
 
 class MovementRepository:
     """Репозиторий для работы с движениями (PostgreSQL, только чтение)"""
     
     def __init__(self, session: Session = None):
-        self.session = session or PostgresSession()
+        #self.session = session or PostgresSession()
+        self.session = session or SQLiteSession() 
+
+
+    def get_data_from_db(self):
+        """Получение всей таблицы из движений"""
+        try:
+            return self.session.query(Movement).all()
+        except SQLAlchemyError as e:
+            #Нужно добавить логирование ошибки
+            raise SQLAlchemyError(f"Ошибка при получении данных из таблицы Movement: {e}")
     
-    def get_all_zones(self) -> List[str]:
+    def get_all_zones_from_db(self) -> List[str]:
         """Получение всех зон из движений"""
-        query = text("SELECT DISTINCT 'Точка регистрации' FROM movements ORDER BY 'Точка регистрации'")
-        result = self.session.execute(query)
-        return [row[0] for row in result.fetchall()]
+        all_zones = self.session.query(
+            distinct(Movement.Точка_регистрации)
+            ).order_by(
+                Movement.Точка_регистрации
+            ).all()
+        return [row[0] for row in all_zones]
     
     def load_excel_to_db(self, excel_path: str = "Движение.xlsx") -> bool:
         """Загрузка данных из Excel в PostgreSQL"""
@@ -98,7 +111,7 @@ class GroupRepository:
     def __init__(self, session: Session = None):
         self.session = session or SQLiteSession()
     
-    def load_zones(self) -> Tuple[List[str], List[str]]:
+    def load_zones_from_db(self) -> Tuple[List[str], List[str]]:
         """Загрузка конфигурации зон"""
         config = self.session.query(ZonesConfig).order_by(ZonesConfig.id.desc()).first()
         if config:
@@ -107,7 +120,7 @@ class GroupRepository:
         from app.config import DEFAULT_ZONES, DEFAULT_ZONES_REP
         return DEFAULT_ZONES.copy(), DEFAULT_ZONES_REP.copy()
     
-    def save_zones(self, zones_list: List[str], zones_rep_list: List[str]) -> None:
+    def save_zones_to_db(self, zones_list: List[str], zones_rep_list: List[str]) -> None:
         """Сохранение конфигурации зон"""
         config = self.session.query(ZonesConfig).order_by(ZonesConfig.id.desc()).first()
         if config:
@@ -121,7 +134,7 @@ class GroupRepository:
             self.session.add(config)
         self.session.commit()
     
-    def load_groups(self, zone_names: Optional[List[str]] = None) -> Dict[str, List[str]]:
+    def load_groups_from_db(self, zone_names: Optional[List[str]] = None) -> Dict[str, List[str]]:
         """Загрузка групп"""
         query = self.session.query(ZoneGroup)
         if zone_names:
@@ -133,7 +146,7 @@ class GroupRepository:
             groups[group.group_name] = json.loads(group.zones)
         return groups
     
-    def save_group(self, group_name: str, zones: List[str]) -> bool:
+    def save_group_to_db(self, group_name: str, zones: List[str]) -> bool:
         """Сохранение группы"""
         try:
             group = self.session.query(ZoneGroup).filter_by(group_name=group_name).first()
@@ -152,7 +165,7 @@ class GroupRepository:
             print(f"Ошибка сохранения группы: {e}")
             return False
     
-    def delete_group(self, group_name: str) -> bool:
+    def delete_group_from_db(self, group_name: str) -> bool:
         """Удаление группы"""
         try:
             group = self.session.query(ZoneGroup).filter_by(group_name=group_name).first()
@@ -165,10 +178,10 @@ class GroupRepository:
             print(f"Ошибка удаления группы: {e}")
             return False
     
-    def get_available_zones(self) -> List[str]:
+    def get_available_zones_for_groups(self) -> List[str]:
         """Получение зон, которые еще не входят ни в одну группу"""
         movement_repo = MovementRepository()
-        all_zones = movement_repo.get_all_zones()
+        all_zones = movement_repo.get_all_zones_from_db()
         movement_repo.close()
         
         groups = self.load_groups()

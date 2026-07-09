@@ -12,6 +12,8 @@ from app.database import (
     get_all_zones_from_db,
 )
 
+from app.db.repository import MovementRepository, GroupRepository
+
 router = APIRouter(prefix="/admin/groups", tags=["admin"])
 templates = Jinja2Templates(directory="templates")
 
@@ -21,25 +23,32 @@ class GroupCreateRequest(BaseModel):
 
 @router.get("/", response_class=HTMLResponse)
 async def groups_page(request: Request):
-    """Страница управления группами"""
+    """Получить все группы"""
+    repo = MovementRepository()
+    try:
+        groups = repo.load_groups()
+        all_zones = repo.get_all_zones()
+        
     # Получаем все зоны для отображения (включая занятые)
-    all_zones = available_zones = get_available_zones_for_groups()
-    groups = load_groups_from_db()
+    #all_zones = available_zones = get_available_zones_for_groups()
+    #groups = load_groups_from_db()
     
     # Для отладки
-    print(f"Все зоны: {all_zones}")
-    print(f"Существующие группы: {groups}")
+        print(f"Все зоны: {all_zones}")
+        print(f"Существующие группы: {groups}")
     
-    return templates.TemplateResponse(
-        request=request, 
-        name="admin_groups.html",
-        context={
-            "request": request,
-            "available_zones": all_zones,  # Передаем все зоны
-            "groups": groups,
-            "groups_json": json.dumps(groups)
-        }
-    )
+        return templates.TemplateResponse(
+            request=request, 
+            name="admin_groups.html",
+            context={
+                "request": request,
+                "available_zones": all_zones,  # Передаем все зоны
+                "groups": groups,
+                "groups_json": json.dumps(groups)
+                }
+            )
+    finally:
+        repo.close()
 
 
 @router.get("/edit/{group_name}")

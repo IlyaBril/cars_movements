@@ -32,7 +32,6 @@ def analyze_zones(
     """API для анализа зон"""
     try:
         df = DataService.get_data()
-        
         stats, balance = DataService.calculate_statistics(df, date, zone_type)
         result = []
         for zone_stat in stats:

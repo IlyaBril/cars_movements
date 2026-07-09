@@ -1,10 +1,13 @@
 import pandas as pd
+import logging
 from datetime import datetime, date
 from typing import List, Tuple, Dict
-from app.models import ZoneStats
+from app.db.models import ZoneStats
+from app.db.repository import MovementRepository, GroupRepository
 from app.services.zone_service import ZoneService
-from app.database import load_groups_from_db, get_db_connection
-import logging
+#from app.database import load_groups_from_db, get_db_connection
+
+
 
 
 logging.basicConfig(level=logging.INFO)
@@ -12,14 +15,18 @@ logger = logging.getLogger(__name__)
 
 logger.info("start")
 class DataService:
+    def __init__(self,
+                 group_repo: GroupRepository,
+                 movement_repo: MovementRepository):
+        self._group_repo = group_repo
+        self._movement_repo = movement_repo
+    
     @staticmethod
     def get_data() -> pd.DataFrame:
         """Загрузка данных из SQLite"""
         try:
-            conn = get_db_connection()
-            df = pd.read_sql_query('SELECT * FROM movements', conn)
-            conn.close()
-            
+            movement_data = self._movement_repo.get_data_from_db()
+            df = pd.DataFrame(movement_data)
             if df.empty:
                 raise ValueError("База данных пуста. Сначала загрузите данные через /load-data")
             df['Дата'] = pd.to_datetime(df['Дата'], format='%Y-%m-%d %H:%M:%S')                
@@ -39,7 +46,9 @@ class DataService:
         else:           
             all_entities = zones.copy()
 
-        groups = load_groups_from_db(all_entities)
+        repo = GroupRepository()
+
+        groups = repo.load_groups_from_db(all_entities)
         logger.info(f"load_groups_from_db {groups}")
         all_available_zones = df['Точка регистрации'].unique()
         logger.info(f"all_available_zones {all_available_zones}")
@@ -93,8 +102,6 @@ class DataService:
     def _calculate_hourly_stats(df: pd.DataFrame, target_date: date, all_entities: List[str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Расчет почасовой статистики въездов и выездов"""
         # Въезды
-        logger.info("calculate hourly stats")
-        logger.info(f"target date {target_date}")
         print('df - transformeed ', df[['Точка регистрации', 'Заказ', 'Дата', 'hour']])
         enter_df = df[df['Дата'].dt.date == target_date]
         print('enter_df ', enter_df[['Точка регистрации', 'Заказ', 'Дата', 'hour']])
@@ -172,7 +179,6 @@ class DataService:
         logger.info(f"entries_pivot ________ {entries_pivot}")
         logger.info(f"exits_pivot ___________ {exits_pivot}")
         logger.info(f"all_entities {all_entities}")
-        logger.info(f"zone_type {zone_type}")
         
         # 4. Формирование результата
         return DataService._build_result(entries_pivot, exits_pivot, all_entities, zone_type)
