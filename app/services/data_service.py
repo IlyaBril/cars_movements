@@ -1,31 +1,43 @@
 import pandas as pd
 import logging
+from fastapi import Depends
 from datetime import datetime, date
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Annotated
 from app.db.models import ZoneStats
 from app.db.repository import MovementRepository, GroupRepository
+from app.db.database import SQLiteSession, PostgresSession
 from app.services.zone_service import ZoneService
-#from app.database import load_groups_from_db, get_db_connection
-
-
+from sqlalchemy.orm import Session
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 logger.info("start")
+
 class DataService:
-    def __init__(self,
-                 group_repo: GroupRepository,
-                 movement_repo: MovementRepository):
-        self._group_repo = group_repo
-        self._movement_repo = movement_repo
+    """ Вся логика вычислений и работы с БД"""
+	
+    def __init__(self):
+        self._sqlite_sesion = SQLiteSession()
+        self._psql_session = PostgresSession()
+        self._group_repo = GroupRepository(self._sqlite_sesion)
+        self._movement_repo = MovementRepository(self._sqlite_sesion)
+		
+    def __enter__(self):
+        return self
     
-    @staticmethod
-    def get_data() -> pd.DataFrame:
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._sqlite_sesion.close()
+        self._psql_session.close()
+    
+    def get_data(self) -> pd.DataFrame:
         """Загрузка данных из SQLite"""
+        print('get data')
         try:
+            print('get data')
             movement_data = self._movement_repo.get_data_from_db()
+            
             df = pd.DataFrame(movement_data)
             if df.empty:
                 raise ValueError("База данных пуста. Сначала загрузите данные через /load-data")
@@ -35,20 +47,18 @@ class DataService:
         except Exception as e:
             raise ValueError(f"Ошибка при чтении данных: {str(e)}")
 
-    @staticmethod
-    def _prepare_zones_and_mapping(zone_type: str, df: pd.DataFrame) -> Tuple[List[str], List[str], Dict[str, str], List[str]]:
+    def _prepare_zones_and_mapping(self, zone_type: str, df: pd.DataFrame) -> Tuple[List[str], List[str], Dict[str, str], List[str]]:
         """Подготовка списков зон и маппинга"""
         logger.info("prepare ")
-        zones, zones_rep = ZoneService.get_zones()   
+        zones, zones_rep = self._group_repo.load_zones_from_db()
         
         if zone_type == "rep":
             all_entities = zones_rep.copy()           
         else:           
             all_entities = zones.copy()
 
-        repo = GroupRepository()
 
-        groups = repo.load_groups_from_db(all_entities)
+        groups = self._group_repo.load_groups_from_db(all_entities)
         logger.info(f"load_groups_from_db {groups}")
         all_available_zones = df['Точка регистрации'].unique()
         logger.info(f"all_available_zones {all_available_zones}")
@@ -69,7 +79,6 @@ class DataService:
         
         return zones, zones_rep, zone_to_group, all_entities
 
-    @staticmethod
     def _transform_dataframe(df: pd.DataFrame, zone_to_group: Dict[str, str]) -> pd.DataFrame:
         """Трансформация DataFrame: замена зон на группы и обработка дубликатов"""
         df_transformed = df.copy()
@@ -98,7 +107,6 @@ class DataService:
         
         return df_transformed
 
-    @staticmethod
     def _calculate_hourly_stats(df: pd.DataFrame, target_date: date, all_entities: List[str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Расчет почасовой статистики въездов и выездов"""
         # Въезды
@@ -125,7 +133,6 @@ class DataService:
         
         return entries_pivot, exits_pivot
 
-    @staticmethod
     def _build_result(entries_pivot: pd.DataFrame, exits_pivot: pd.DataFrame, 
                      all_entities: List[str], zone_type: str) -> Tuple[List[ZoneStats], str]:
         """Формирование результата и балансовых сообщений"""
@@ -157,8 +164,7 @@ class DataService:
         
         return result, "\n".join(balance_messages)
 
-    @staticmethod
-    def calculate_statistics(df: pd.DataFrame, date_filter: str, zone_type: str = "main") -> Tuple[List[ZoneStats], str]:
+    def calculate_statistics(self, df: pd.DataFrame, date_filter: str, zone_type: str = "main") -> Tuple[List[ZoneStats], str]:
         """Основной метод - оркестрирует все шаги"""
         # 1. Подготовка зон и маппинга
         
@@ -181,4 +187,8 @@ class DataService:
         logger.info(f"all_entities {all_entities}")
         
         # 4. Формирование результата
-        return DataService._build_result(entries_pivot, exits_pivot, all_entities, zone_type)
+        return self._build_result(entries_pivot, exits_pivot, all_entities, zone_type)
+				
+    def load_excel_to_db(self):
+        return self._movement_repo.load_excel_to_db()
+		

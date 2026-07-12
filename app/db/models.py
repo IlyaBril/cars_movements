@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, TIMESTAMP, func
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 from pydantic import BaseModel
+from typing import Dict, List, Optional
 
 
 Base = declarative_base()

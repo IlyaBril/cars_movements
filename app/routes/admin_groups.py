@@ -1,65 +1,57 @@
+import json
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import List
-import json
-from app.database import (
-    get_available_zones_for_groups,
-    load_groups_from_db, 
-    save_group_to_db,
-    delete_group_from_db,
-    get_all_zones_from_db,
-)
+from app.services.zone_service import ZoneService
+from app.services.data_service import DataService
 
 from app.db.repository import MovementRepository, GroupRepository
 
 router = APIRouter(prefix="/admin/groups", tags=["admin"])
 templates = Jinja2Templates(directory="templates")
 
+zone_service = ZoneService()
+data_service = DataService()
+
 class GroupCreateRequest(BaseModel):
     group_name: str
     zones: List[str]
 
+
 @router.get("/", response_class=HTMLResponse)
 async def groups_page(request: Request):
     """Получить все группы"""
-    repo = MovementRepository()
-    try:
-        groups = repo.load_groups()
-        all_zones = repo.get_all_zones()
+
+    groups = zone_service.get_zones()
+    all_zones = zone_service.get_all_zones()
         
     # Получаем все зоны для отображения (включая занятые)
-    #all_zones = available_zones = get_available_zones_for_groups()
-    #groups = load_groups_from_db()
+    print(f"Все зоны: {all_zones}")
+    print(f"Существующие группы: {groups}")
     
-    # Для отладки
-        print(f"Все зоны: {all_zones}")
-        print(f"Существующие группы: {groups}")
-    
-        return templates.TemplateResponse(
-            request=request, 
-            name="admin_groups.html",
-            context={
-                "request": request,
-                "available_zones": all_zones,  # Передаем все зоны
-                "groups": groups,
-                "groups_json": json.dumps(groups)
-                }
-            )
-    finally:
-        repo.close()
+    return templates.TemplateResponse(
+        request=request, 
+        name="admin_groups.html",
+        context={
+            "request": request,
+            "available_zones": all_zones,  # Передаем все зоны
+            "groups": groups,
+            "groups_json": json.dumps(groups)
+            }
+        )
 
 
 @router.get("/edit/{group_name}")
 async def get_edit_data(group_name: str):
     """Данные для редактирования группы"""
-    groups = load_groups_from_db()
+    groups = zone_service.load_groups_from_db()
     if group_name not in groups:
         raise HTTPException(status_code=404, detail="Группа не найдена")
     
     # Получаем доступные зоны (включая зоны редактируемой группы)
-    available_zones = get_available_zones_for_groups(editing_group=group_name)
+    available_zones = zone_service.get_available_zones_for_groups(editing_group=group_name)
     print('get_edit_data available_zones', available_zones)
     print('get_edit_data current_zones', groups[group_name])
     return {
@@ -79,7 +71,7 @@ async def create_group(request: GroupCreateRequest):
             raise HTTPException(status_code=400, detail="Выберите хотя бы одну зону")
         
         # Проверяем, что зоны не используются в других группах
-        existing_groups = load_groups_from_db()
+        existing_groups = zone_service.load_groups_from_db()
         for group_name, zones in existing_groups.items():
             if group_name != request.group_name:
                 for zone in request.zones:
@@ -89,7 +81,7 @@ async def create_group(request: GroupCreateRequest):
                             detail=f"Зона '{zone}' уже используется в группе '{group_name}'"
                         )
         
-        success = save_group_to_db(request.group_name.strip(), request.zones)
+        success = zone_service.save_group_to_db(request.group_name.strip(), request.zones)
         if success:
             return {"status": "success", "message": f"Группа '{request.group_name}' успешно сохранена"}
         else:
@@ -104,7 +96,7 @@ async def create_group(request: GroupCreateRequest):
 async def delete_group(group_name: str):
     """Удаление группы"""
     try:
-        success = delete_group_from_db(group_name)
+        success = zone_service.delete_group_from_db(group_name)
         if success:
             return {"status": "success", "message": f"Группа '{group_name}' удалена"}
         else:

@@ -1,22 +1,26 @@
 import json
 import pandas as pd
 from datetime import datetime
-from typing import List, Tuple, Dict, Optional
+from fastapi import Depends
+from typing import List, Tuple, Dict, Optional, Annotated
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, distinct
+
+from .database import SQLiteSession, PostgresSession, get_sqlite_session
 from .models import Movement, Metadata, ZonesConfig, ZoneGroup
-from .database import SQLiteSession, PostgresSession
+
+
 
 class MovementRepository:
     """Репозиторий для работы с движениями (PostgreSQL, только чтение)"""
     
     def __init__(self, session: Session = None):
-        #self.session = session or PostgresSession()
-        self.session = session or SQLiteSession() 
+        self.session = session
 
 
     def get_data_from_db(self):
         """Получение всей таблицы из движений"""
+        print('mov repo')
         try:
             return self.session.query(Movement).all()
         except SQLAlchemyError as e:
@@ -30,6 +34,7 @@ class MovementRepository:
             ).order_by(
                 Movement.Точка_регистрации
             ).all()
+        print(all_zones)
         return [row[0] for row in all_zones]
     
     def load_excel_to_db(self, excel_path: str = "Движение.xlsx") -> bool:
@@ -109,7 +114,7 @@ class GroupRepository:
     """Репозиторий для работы с группами (SQLite)"""
     
     def __init__(self, session: Session = None):
-        self.session = session or SQLiteSession()
+        self.session = session
     
     def load_zones_from_db(self) -> Tuple[List[str], List[str]]:
         """Загрузка конфигурации зон"""
@@ -137,6 +142,8 @@ class GroupRepository:
     def load_groups_from_db(self, zone_names: Optional[List[str]] = None) -> Dict[str, List[str]]:
         """Загрузка групп"""
         query = self.session.query(ZoneGroup)
+        print('load_groups_from_db ', query)
+        print('load_groups_from_db zone_names', zone_names)
         if zone_names:
             query = query.filter(ZoneGroup.group_name.in_(zone_names))
         query = query.order_by(ZoneGroup.group_name)
@@ -144,6 +151,7 @@ class GroupRepository:
         groups = {}
         for group in query.all():
             groups[group.group_name] = json.loads(group.zones)
+        print('load_groups_from_db - groups ', groups)
         return groups
     
     def save_group_to_db(self, group_name: str, zones: List[str]) -> bool:
@@ -192,7 +200,3 @@ class GroupRepository:
         
         available = [zone for zone in all_zones if zone not in used_zones]
         return available
-    
-    def close(self):
-        """Закрыть сессию"""
-        self.session.close()

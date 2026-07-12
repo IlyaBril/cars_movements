@@ -5,9 +5,11 @@ from app.services.data_service import DataService
 from app.services.zone_service import ZoneService
 from datetime import datetime
 
+
 router = APIRouter(tags=["analysis"])
 templates = Jinja2Templates(directory="templates")
 
+data_service = DataService()
 
 def default_date():
     return datetime.today().strftime("%Y-%m-%d")
@@ -17,7 +19,7 @@ def root(request: Request):
     """Главная страница с интерфейсом"""
     
     date = default_date()
-    
+    print('root')
     return templates.TemplateResponse(  
         request=request, name="index(bootstrap).html",
         context={"default_date": date},
@@ -27,12 +29,16 @@ def root(request: Request):
 @router.get("/analyze/")
 def analyze_zones(
     date: str = Query(default="2026-06-09"),
-    zone_type: str = Query(default="main")
+    zone_type: str = Query(default="main"),
+
 ):
     """API для анализа зон"""
+    print('zones')
     try:
-        df = DataService.get_data()
-        stats, balance = DataService.calculate_statistics(df, date, zone_type)
+        print('requested')
+
+        df = data_service.get_data()
+        stats, balance = data_service.calculate_statistics(df, date, zone_type)
         result = []
         for zone_stat in stats:
             result.append({

@@ -1,18 +1,16 @@
+from fastapi import Depends
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.pool import StaticPool
 from app.config import DB_FILE
-from .models import Base
+from sqlalchemy.orm import Session, sessionmaker
+from typing import Annotated
+from .models import Base, ZonesConfig
 
 
-# SQLite база данных (для групп и конфигурации)
 SQLITE_DATABASE_URL = f"sqlite:///{DB_FILE}"
-
-# PostgreSQL база данных (для movements, только чтение)
-# Замените на свои параметры подключения
 POSTGRES_DATABASE_URL = "postgresql://user:password@localhost/dbname"
 
-# Создаем движки
 sqlite_engine = create_engine(
     SQLITE_DATABASE_URL,
     connect_args={"check_same_thread": False},
@@ -27,6 +25,7 @@ postgres_engine = create_engine(
 # Создаем сессии
 SQLiteSession = scoped_session(sessionmaker(bind=sqlite_engine))
 PostgresSession = scoped_session(sessionmaker(bind=postgres_engine))
+
 
 def init_sqlite_database():
     """Инициализация SQLite базы данных"""
@@ -48,6 +47,31 @@ def init_sqlite_database():
     finally:
         session.close()
 
+
 def init_postgres_database():
     """Инициализация PostgreSQL базы данных (создание таблиц)"""
     Base.metadata.create_all(bind=postgres_engine)
+
+
+def get_sqlite_session():
+    """Создает сессию БД и гарантирует её закрытие после использования."""
+    session = SQLiteSession()
+    try:
+        yield session
+    finally:
+        session.close()
+			
+			
+def get_psql_session():
+    """Создает сессию БД и гарантирует её закрытие после использования."""
+    with PostgresSession() as session:
+        try:
+            yield session
+        finally:
+            pass
+
+
+def close_db_connections():
+    """Закрывает все соединения в пуле при остановке приложения."""
+    sqlite_engine.dispose()
+    postgres_engine.dispose()
