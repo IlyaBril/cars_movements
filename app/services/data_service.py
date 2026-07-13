@@ -6,6 +6,7 @@ from typing import List, Tuple, Dict, Annotated
 from app.db.models import ZoneStats
 from app.db.repository import MovementRepository, GroupRepository
 from app.db.database import SQLiteSession, PostgresSession
+from app.db.schemas import MovementSchema
 from app.services.zone_service import ZoneService
 from sqlalchemy.orm import Session
 
@@ -35,10 +36,10 @@ class DataService:
         """Загрузка данных из SQLite"""
         print('get data')
         try:
-            print('get data')
-            movement_data = self._movement_repo.get_data_from_db()
-            
-            df = pd.DataFrame(movement_data)
+            movements = self._movement_repo.get_data_from_db()
+            schema = MovementSchema(many=True)
+            df = pd.DataFrame(schema.dump(movements, many=True))
+            print(df)
             if df.empty:
                 raise ValueError("База данных пуста. Сначала загрузите данные через /load-data")
             df['Дата'] = pd.to_datetime(df['Дата'], format='%Y-%m-%d %H:%M:%S')                
@@ -79,7 +80,7 @@ class DataService:
         
         return zones, zones_rep, zone_to_group, all_entities
 
-    def _transform_dataframe(df: pd.DataFrame, zone_to_group: Dict[str, str]) -> pd.DataFrame:
+    def _transform_dataframe(self, df: pd.DataFrame, zone_to_group: Dict[str, str]) -> pd.DataFrame:
         """Трансформация DataFrame: замена зон на группы и обработка дубликатов"""
         df_transformed = df.copy()
 
@@ -107,7 +108,7 @@ class DataService:
         
         return df_transformed
 
-    def _calculate_hourly_stats(df: pd.DataFrame, target_date: date, all_entities: List[str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def _calculate_hourly_stats(self, df: pd.DataFrame, target_date: date, all_entities: List[str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Расчет почасовой статистики въездов и выездов"""
         # Въезды
         print('df - transformeed ', df[['Точка регистрации', 'Заказ', 'Дата', 'hour']])
@@ -133,7 +134,7 @@ class DataService:
         
         return entries_pivot, exits_pivot
 
-    def _build_result(entries_pivot: pd.DataFrame, exits_pivot: pd.DataFrame, 
+    def _build_result(self, entries_pivot: pd.DataFrame, exits_pivot: pd.DataFrame, 
                      all_entities: List[str], zone_type: str) -> Tuple[List[ZoneStats], str]:
         """Формирование результата и балансовых сообщений"""
         result = []

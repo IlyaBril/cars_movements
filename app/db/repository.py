@@ -27,15 +27,15 @@ class MovementRepository:
             #Нужно добавить логирование ошибки
             raise SQLAlchemyError(f"Ошибка при получении данных из таблицы Movement: {e}")
     
-    def get_all_zones_from_db(self) -> List[str]:
+    def get_all_zones_from_db(self)-> list[tuple[str]]: 
         """Получение всех зон из движений"""
         all_zones = self.session.query(
             distinct(Movement.Точка_регистрации)
             ).order_by(
                 Movement.Точка_регистрации
             ).all()
-        print(all_zones)
-        return [row[0] for row in all_zones]
+        
+        return all_zones
     
     def load_excel_to_db(self, excel_path: str = "Движение.xlsx") -> bool:
         """Загрузка данных из Excel в PostgreSQL"""
@@ -139,20 +139,12 @@ class GroupRepository:
             self.session.add(config)
         self.session.commit()
     
-    def load_groups_from_db(self, zone_names: Optional[List[str]] = None) -> Dict[str, List[str]]:
+    def load_groups_from_db(self, zone_names: Optional[List[str]] = None) -> List[ZoneGroup]:
         """Загрузка групп"""
         query = self.session.query(ZoneGroup)
-        print('load_groups_from_db ', query)
-        print('load_groups_from_db zone_names', zone_names)
         if zone_names:
             query = query.filter(ZoneGroup.group_name.in_(zone_names))
-        query = query.order_by(ZoneGroup.group_name)
-        
-        groups = {}
-        for group in query.all():
-            groups[group.group_name] = json.loads(group.zones)
-        print('load_groups_from_db - groups ', groups)
-        return groups
+        return query.order_by(ZoneGroup.group_name).all()
     
     def save_group_to_db(self, group_name: str, zones: List[str]) -> bool:
         """Сохранение группы"""
@@ -185,18 +177,3 @@ class GroupRepository:
             self.session.rollback()
             print(f"Ошибка удаления группы: {e}")
             return False
-    
-    def get_available_zones_for_groups(self) -> List[str]:
-        """Получение зон, которые еще не входят ни в одну группу"""
-        movement_repo = MovementRepository()
-        all_zones = movement_repo.get_all_zones_from_db()
-        movement_repo.close()
-        
-        groups = self.load_groups()
-        
-        used_zones = set()
-        for zones in groups.values():
-            used_zones.update(zones)
-        
-        available = [zone for zone in all_zones if zone not in used_zones]
-        return available

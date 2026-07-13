@@ -24,19 +24,20 @@ class GroupCreateRequest(BaseModel):
 async def groups_page(request: Request):
     """Получить все группы"""
 
-    groups = zone_service.get_zones()
-    all_zones = zone_service.get_all_zones()
+    groups = zone_service.get_groups()
+    print(f"{__name__} Существующие группы: {groups}")
+    available_zones = zone_service.get_available_zones()
         
     # Получаем все зоны для отображения (включая занятые)
-    print(f"Все зоны: {all_zones}")
-    print(f"Существующие группы: {groups}")
+    print(f"{__name__} available zones: {available_zones}")
+    
     
     return templates.TemplateResponse(
         request=request, 
         name="admin_groups.html",
         context={
             "request": request,
-            "available_zones": all_zones,  # Передаем все зоны
+            "available_zones": available_zones,  # Передаем все зоны
             "groups": groups,
             "groups_json": json.dumps(groups)
             }
@@ -46,12 +47,12 @@ async def groups_page(request: Request):
 @router.get("/edit/{group_name}")
 async def get_edit_data(group_name: str):
     """Данные для редактирования группы"""
-    groups = zone_service.load_groups_from_db()
+    groups = zone_service.get_groups()
     if group_name not in groups:
         raise HTTPException(status_code=404, detail="Группа не найдена")
     
     # Получаем доступные зоны (включая зоны редактируемой группы)
-    available_zones = zone_service.get_available_zones_for_groups(editing_group=group_name)
+    available_zones = zone_service.get_available_zones(editing_group=group_name)
     print('get_edit_data available_zones', available_zones)
     print('get_edit_data current_zones', groups[group_name])
     return {
@@ -71,7 +72,8 @@ async def create_group(request: GroupCreateRequest):
             raise HTTPException(status_code=400, detail="Выберите хотя бы одну зону")
         
         # Проверяем, что зоны не используются в других группах
-        existing_groups = zone_service.load_groups_from_db()
+        existing_groups = zone_service.get_groups()
+        print('admin groups existing_groups ', existing_groups)
         for group_name, zones in existing_groups.items():
             if group_name != request.group_name:
                 for zone in request.zones:
