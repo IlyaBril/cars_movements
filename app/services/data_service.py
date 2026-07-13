@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import logging
 from fastapi import Depends
@@ -14,7 +15,7 @@ from sqlalchemy.orm import Session
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-logger.info("start")
+logger.debug("start")
 
 class DataService:
     """ Вся логика вычислений и работы с БД"""
@@ -32,11 +33,11 @@ class DataService:
         self._sqlite_sesion.close()
         self._psql_session.close()
     
-    def get_data(self) -> pd.DataFrame:
+    def get_data(self, date_filter=None) -> pd.DataFrame:
         """Загрузка данных из SQLite"""
-        print('get data')
         try:
-            movements = self._movement_repo.get_data_from_db()
+            target_date = pd.Timestamp(date_filter).date()
+            movements = self._movement_repo.get_data_from_db(target_date)
             schema = MovementSchema(many=True)
             df = pd.DataFrame(schema.dump(movements, many=True))
             print(df)
@@ -50,32 +51,40 @@ class DataService:
 
     def _prepare_zones_and_mapping(self, zone_type: str, df: pd.DataFrame) -> Tuple[List[str], List[str], Dict[str, str], List[str]]:
         """Подготовка списков зон и маппинга"""
-        logger.info("prepare ")
         zones, zones_rep = self._group_repo.load_zones_from_db()
-        
+        print(f"{__name__} - zones, zones_rep {zones} - {zones_rep}")        
         if zone_type == "rep":
             all_entities = zones_rep.copy()           
         else:           
             all_entities = zones.copy()
 
+        query = self._group_repo.load_groups_from_db(all_entities)
+        print(f"{__name__} - load_groups_from_db {query}")
+        groups = {}
+        for group in query:
+            print(f"{__name__} - group_name {group.group_name} zones {group.zones}")
+            groups[group.group_name] = json.loads(group.zones)
+        print(f"{__name__} - groups {groups}")
 
-        groups = self._group_repo.load_groups_from_db(all_entities)
-        logger.info(f"load_groups_from_db {groups}")
         all_available_zones = df['Точка регистрации'].unique()
-        logger.info(f"all_available_zones {all_available_zones}")
         zone_to_group = {}           
         
         for group_name, group_zones in groups.items():
-              # Проверяем, все ли зоны группы существуют
-            if all(zone in all_available_zones for zone in group_zones):
-                for zone in group_zones:
+            existing_zones = [zone for zone in group_zones if zone in all_available_zones]
+            missing_zones = [zone for zone in group_zones if zone not in all_available_zones]
+
+            if existing_zones:  # Если есть хотя бы одна существующая зона
+                for zone in existing_zones:
                     zone_to_group[zone] = group_name
-                print(f"✅ Добавлена группа: {group_name}")
+        
+                if missing_zones:
+                    print(f"⚠️ Группа '{group_name}' добавлена частично. Пропущены зоны: {missing_zones}")
+                else:
+                    print(f"✅ Добавлена группа: {group_name}")
             else:
-                missing = [z for z in group_zones if z not in all_available_zones]
-                print(f"⚠️ Группа '{group_name}' пропущена. Отсутствуют зоны: {missing}")
+                print(f"❌ Группа '{group_name}' пропущена. Нет доступных зон")
                 all_entities.remove(group_name)
-            
+    
             print(f"Группы для замены: {zone_to_group}")
         
         return zones, zones_rep, zone_to_group, all_entities
@@ -171,8 +180,8 @@ class DataService:
         
         _, _, zone_to_group, all_entities = self._prepare_zones_and_mapping(zone_type, df)
                 
-        logger.info(f"zone to group, {datetime.now()} {zone_to_group}")
-        logger.info(f" all_entities, { all_entities}")
+        logger.debug(f"zone to group, {datetime.now()} {zone_to_group}")
+        logger.debug(f" all_entities, { all_entities}")
         
         # 2. Трансформация DataFrame
         target_date = pd.Timestamp(date_filter).date()
@@ -183,9 +192,9 @@ class DataService:
         entries_pivot, exits_pivot = self._calculate_hourly_stats(
             df_transformed, target_date, all_entities
         )
-        logger.info(f"entries_pivot ________ {entries_pivot}")
-        logger.info(f"exits_pivot ___________ {exits_pivot}")
-        logger.info(f"all_entities {all_entities}")
+        logger.debug(f"entries_pivot ________ {entries_pivot}")
+        logger.debug(f"exits_pivot ___________ {exits_pivot}")
+        logger.debug(f"all_entities {all_entities}")
         
         # 4. Формирование результата
         return self._build_result(entries_pivot, exits_pivot, all_entities, zone_type)

@@ -5,6 +5,8 @@ from fastapi import Depends
 from typing import List, Tuple, Dict, Optional, Annotated
 from sqlalchemy.orm import Session
 from sqlalchemy import text, distinct
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import func
 
 from .database import SQLiteSession, PostgresSession, get_sqlite_session
 from .models import Movement, Metadata, ZonesConfig, ZoneGroup
@@ -17,12 +19,43 @@ class MovementRepository:
     def __init__(self, session: Session = None):
         self.session = session
 
-
-    def get_data_from_db(self):
+    def get_data_from_db_backup(self, date=None):
         """Получение всей таблицы из движений"""
-        print('mov repo')
         try:
             return self.session.query(Movement).all()
+
+        except SQLAlchemyError as e:
+            #Нужно добавить логирование ошибки
+            raise SQLAlchemyError(f"Ошибка при получении данных из таблицы Movement: {e}")
+
+    def get_data_from_db (self, date=None):
+        """Получение всей таблицы из движений"""
+        try:
+            
+            if date:
+                orders_query = self.session.query(Movement.Заказ).filter(
+                    func.date(Movement.Дата) == date
+                    ).distinct()
+                print('orders_query', orders_query)
+
+                orders = orders_query.all()
+                
+  
+                # Извлекаем номера заказов
+                order_numbers = [order[0] for order in orders]
+                
+                if not order_numbers:
+                    return []  # Если заказов нет, возвращаем пустой список
+        
+                # Шаг 2: Получаем все движения, где номера заказов есть в списке
+                movements = self.session.query(Movement).filter(
+                    Movement.Заказ.in_(order_numbers)
+                    ).all()
+                
+                return movements
+            else:
+                return self.session.query(Movement).all()
+            
         except SQLAlchemyError as e:
             #Нужно добавить логирование ошибки
             raise SQLAlchemyError(f"Ошибка при получении данных из таблицы Movement: {e}")
@@ -139,8 +172,11 @@ class GroupRepository:
             self.session.add(config)
         self.session.commit()
     
-    def load_groups_from_db(self, zone_names: Optional[List[str]] = None) -> List[ZoneGroup]:
-        """Загрузка групп"""
+    def load_groups_from_db(self,
+        zone_names: Optional[List[str]] = None,
+        ) -> List[ZoneGroup]:
+        """Выделение из списка зон главной страницы
+           групп для показа"""
         query = self.session.query(ZoneGroup)
         if zone_names:
             query = query.filter(ZoneGroup.group_name.in_(zone_names))
