@@ -1,5 +1,5 @@
 import json
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Dict
 from app.db.repository import MovementRepository, GroupRepository
 from app.db.database import SQLiteSession, PostgresSession
 
@@ -27,7 +27,9 @@ class ZoneService:
         """Обновить зоны в БД"""
         self._group_repo.save_zones_to_db(zones, zones_rep)
     
-    def get_groups(self, zone_names: Optional[List[str]] = None) -> Dict[str, List[str]]:
+    def get_groups(self,
+        zone_names: Optional[List[str]] = None,
+        ) -> Dict[str, List[str]]:
         """Получить группы из БД"""
         query = self._group_repo.load_groups_from_db(zone_names)
         groups = {}
@@ -60,12 +62,10 @@ class ZoneService:
             available_zones = sorted(set(available_zones) | set(editing_zones))
         else:
             available_zones = sorted(available_zones)
-    
         return available_zones
 
     def save_group_to_db(self, group_name: str, zones: List[str]) -> bool:
         result = self._group_repo.save_group_to_db(
-            group_name: str,
-            zones: List[str]
+            group_name, zones
             )
         return result

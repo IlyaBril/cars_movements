@@ -7,20 +7,13 @@ from app.db.repository import GroupRepository
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory="templates")
-
-
-def get_zone_service():
-    return ZoneService()
 	
-zone_service2 = ZoneService()
+zone_service = ZoneService()
 
 @router.get("/", response_class=HTMLResponse)
-async def admin_page(request: Request,
-                     #zone_service: ZoneService = Depends(get_zone_service)
-					 ):
-					 
+async def admin_page(request: Request):				 
     """Страница администрирования"""
-    zones, zones_rep = zone_service2.get_zones()
+    zones, zones_rep = zone_service.get_zones()
     return templates.TemplateResponse(
         request=request, name="admin.html",
         context={
@@ -31,11 +24,10 @@ async def admin_page(request: Request,
     )
 
 @router.post("/update_zones")
-async def update_zones(request: ZoneUpdateRequest,
-					   ):
+async def update_zones(request: ZoneUpdateRequest):
     """Обновление списков зон"""
     try:
-        zone_service2.update_zones(request.zones, request.zones_rep)
+        zone_service.update_zones(request.zones, request.zones_rep)
         return {"status": "success", "message": "Зоны успешно обновлены"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

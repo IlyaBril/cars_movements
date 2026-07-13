@@ -1,3 +1,4 @@
+import json
 import pandas as pd
 import logging
 from fastapi import Depends
@@ -50,19 +51,22 @@ class DataService:
 
     def _prepare_zones_and_mapping(self, zone_type: str, df: pd.DataFrame) -> Tuple[List[str], List[str], Dict[str, str], List[str]]:
         """Подготовка списков зон и маппинга"""
-        logger.info("prepare ")
         zones, zones_rep = self._group_repo.load_zones_from_db()
-        
+        print(f"{__name__} - zones, zones_rep {zones} - {zones_rep}")        
         if zone_type == "rep":
             all_entities = zones_rep.copy()           
         else:           
             all_entities = zones.copy()
 
+        query = self._group_repo.load_groups_from_db(all_entities)
+        print(f"{__name__} - load_groups_from_db {query}")
+        groups = {}
+        for group in query:
+            print(f"{__name__} - group_name {group.group_name} zones {group.zones}")
+            groups[group.group_name] = json.loads(group.zones)
+        print(f"{__name__} - groups {groups}")
 
-        groups = self._group_repo.load_groups_from_db(all_entities)
-        logger.info(f"load_groups_from_db {groups}")
         all_available_zones = df['Точка регистрации'].unique()
-        logger.info(f"all_available_zones {all_available_zones}")
         zone_to_group = {}           
         
         for group_name, group_zones in groups.items():

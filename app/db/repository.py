@@ -139,8 +139,11 @@ class GroupRepository:
             self.session.add(config)
         self.session.commit()
     
-    def load_groups_from_db(self, zone_names: Optional[List[str]] = None) -> List[ZoneGroup]:
-        """Загрузка групп"""
+    def load_groups_from_db(self,
+        zone_names: Optional[List[str]] = None,
+        ) -> List[ZoneGroup]:
+        """Выделение из списка зон главной страницы
+           групп для показа"""
         query = self.session.query(ZoneGroup)
         if zone_names:
             query = query.filter(ZoneGroup.group_name.in_(zone_names))
