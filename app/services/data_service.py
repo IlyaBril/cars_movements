@@ -168,18 +168,18 @@ class DataService:
         """Основной метод - оркестрирует все шаги"""
         # 1. Подготовка зон и маппинга
         
-        _, _, zone_to_group, all_entities = DataService._prepare_zones_and_mapping(zone_type, df)
+        _, _, zone_to_group, all_entities = self._prepare_zones_and_mapping(zone_type, df)
                 
         logger.info(f"zone to group, {datetime.now()} {zone_to_group}")
         logger.info(f" all_entities, { all_entities}")
         
         # 2. Трансформация DataFrame
         target_date = pd.Timestamp(date_filter).date()
-        df_transformed = DataService._transform_dataframe(df, zone_to_group)
+        df_transformed = self._transform_dataframe(df, zone_to_group)
         logger.info(f"{datetime.now()} zone to group, {zone_to_group}")
         
         # 3. Расчет почасовой статистики
-        entries_pivot, exits_pivot = DataService._calculate_hourly_stats(
+        entries_pivot, exits_pivot = self._calculate_hourly_stats(
             df_transformed, target_date, all_entities
         )
         logger.info(f"entries_pivot ________ {entries_pivot}")
