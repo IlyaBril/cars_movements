@@ -34,8 +34,8 @@ def analyze_zones(
 ):
     """API для анализа зон"""
     try:
-        df = data_service.get_data()
-        print(f'{__name__} df ',df)
+        df = data_service.get_data(date)
+        #print(f'{__name__} df ',df)
         stats, balance = data_service.calculate_statistics(df, date, zone_type)
         print(f'{__name__} stats, balance ',stats, balance)
         result = []
