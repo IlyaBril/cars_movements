@@ -138,6 +138,29 @@ class MovementRepository:
             return meta.value if meta else None
         finally:
             metadata_session.close()
+
+
+    def get_available_dates(self, days_back: int = 30) -> List[str]:
+        """Получение доступных дат для анализа"""
+        try:
+            # Получаем уникальные даты за последние days_back дней
+            from sqlalchemy import func, and_
+            from datetime import datetime, timedelta
+        
+            cutoff_date = datetime.now() - timedelta(days=days_back)
+        
+            dates = self.session.query(
+                func.date(Movement.Дата).label('date')
+                ).filter(
+                    Movement.Дата >= cutoff_date
+                    ).distinct().order_by(
+                        func.date(Movement.Дата).desc()
+                        ).all()
+        
+            return [str(d[0]) for d in dates if d[0] is not None]
+        except SQLAlchemyError as e:
+            print(f"Ошибка получения доступных дат: {e}")
+            return []
     
     def close(self):
         """Закрыть сессию"""
