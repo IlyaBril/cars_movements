@@ -34,7 +34,13 @@ class DataService:
         self._psql_session.close()
     
     def get_data(self, date_filter=None) -> pd.DataFrame:
-        """Загрузка данных из SQLite"""
+        """
+           Загрузка данных из SQLite
+           Возвращает таблицу со всеми движениями VIN в таблице
+           на которые есть любое движение этого VIN в указанный день date_filter
+           Преобразует формат столбца Дата в %Y-%m-%d %H:%M:%S
+
+        """
         try:
             target_date = pd.Timestamp(date_filter).date()
             movements = self._movement_repo.get_data_from_db(target_date)
@@ -119,18 +125,14 @@ class DataService:
 
     def _calculate_hourly_stats(self, df: pd.DataFrame, target_date: date, all_entities: List[str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Расчет почасовой статистики въездов и выездов"""
-        # Въезды
-        print('df - transformeed ', df[['Точка регистрации', 'Заказ', 'Дата', 'hour']])
+
+        # Въезды       
         enter_df = df[df['Дата'].dt.date == target_date]
-        print('enter_df ', enter_df[['Точка регистрации', 'Заказ', 'Дата', 'hour']])
         entries_pivot = pd.crosstab(
             enter_df['Точка регистрации'],
             enter_df['hour'],
             dropna=False
         ).reindex(columns=range(6, 24), fill_value=0)
-
-        logger.info(f"entries_pivot {entries_pivot}")
-        
         
         # Выезды
         exit_df = df[df['exit_time'].dt.date == target_date]

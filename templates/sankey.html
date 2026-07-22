@@ -5,86 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sankey Диаграмма потоков</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        body {
-            background-color: #f8f9fa;
-        }
-        .navbar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        .card {
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            transition: all 0.3s ease;
-        }
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
-        }
-        .stats-card {
-            border-left: 4px solid #667eea;
-            margin-bottom: 20px;
-            transition: all 0.3s ease;
-        }
-        .stats-card:hover {
-            transform: translateX(5px);
-        }
-        .badge-zone {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        .loading-spinner {
-            display: none;
-            text-align: center;
-            padding: 50px;
-        }
-        .chart-container {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-top: 20px;
-        }
-        .balance-text {
-            font-size: 14px;
-            color: #6c757d;
-            font-family: monospace;
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 10px;
-            border-left: 4px solid #28a745;
-        }
-        .zone-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 10px;
-            margin-top: 15px;
-        }
-        .zone-stat-item {
-            background: #f8f9fa;
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: 1px solid #dee2e6;
-            font-size: 13px;
-        }
-        .zone-stat-item .zone-name {
-            font-weight: bold;
-            color: #495057;
-        }
-        .zone-stat-item .zone-count {
-            color: #667eea;
-            font-weight: bold;
-        }
+        body { background-color: #f8f9fa; }
+        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card { border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .chart-container { background: white; border-radius: 15px; padding: 20px; margin-top: 20px; }
+        .loading-spinner { display: none; text-align: center; padding: 50px; }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container">
-            <a class="navbar-brand" href="/">
-                <i class="bi bi-graph-up-arrow"></i>
-                📊 Система анализа потоков
-            </a>
+            <a class="navbar-brand" href="/">📊 Система анализа потоков</a>
             <div class="navbar-nav ms-auto">
                 <a class="nav-link" href="/">Главная</a>
                 <a class="nav-link active" href="/sankey">Sankey</a>
@@ -97,18 +30,13 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-body">
-                        <h5 class="card-title">
-                            <i class="bi bi-diagram-3"></i> Sankey Диаграмма потоков
-                        </h5>
-                        <p class="card-text text-muted">
-                            Визуализация перемещений между зонами за выбранный день
-                        </p>
+                        <h5 class="card-title">📊 Sankey Диаграмма потоков</h5>
+                        <p class="card-text text-muted">Визуализация перемещений между зонами за выбранный день</p>
                         
                         <form id="sankeyForm" class="row g-3 mt-3">
                             <div class="col-md-4">
                                 <label for="date" class="form-label">Дата</label>
-                                <input type="date" class="form-control" id="date" 
-                                       value="{{ default_date }}" required>
+                                <input type="date" class="form-control" id="date" value="{{ default_date }}" required>
                             </div>
                             <div class="col-md-4">
                                 <label for="zoneType" class="form-label">Тип зон</label>
@@ -118,9 +46,7 @@
                                 </select>
                             </div>
                             <div class="col-md-4 d-flex align-items-end">
-                                <button type="submit" class="btn btn-primary w-100">
-                                    <i class="bi bi-play-btn"></i> Построить диаграмму
-                                </button>
+                                <button type="submit" class="btn btn-primary w-100">Построить диаграмму</button>
                             </div>
                         </form>
                     </div>
@@ -128,7 +54,6 @@
             </div>
         </div>
 
-        <!-- Spinner загрузки -->
         <div id="loadingSpinner" class="loading-spinner">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Загрузка...</span>
@@ -136,38 +61,14 @@
             <p class="mt-2 text-muted">Загрузка данных...</p>
         </div>
 
-        <!-- Контейнер для диаграммы -->
         <div id="chartContainer" class="chart-container" style="display: none;">
             <div id="chartContent"></div>
-        </div>
-
-        <!-- Информация о балансе -->
-        <div id="balanceInfo" style="display: none;" class="mt-3">
-            <div class="card">
-                <div class="card-body">
-                    <h6 class="card-title">📊 Баланс потоков</h6>
-                    <div id="balanceContent" class="balance-text"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Статистика по зонам -->
-        <div id="zoneStats" style="display: none;" class="mt-3">
-            <div class="card">
-                <div class="card-body">
-                    <h6 class="card-title">📈 Статистика по зонам</h6>
-                    <div id="zoneStatsContent" class="zone-stats"></div>
-                </div>
-            </div>
         </div>
     </div>
 
     <script>
         $(document).ready(function() {
-            // Загружаем данные при загрузке страницы
             loadSankeyData();
-
-            // Обработчик отправки формы
             $('#sankeyForm').on('submit', function(e) {
                 e.preventDefault();
                 loadSankeyData();
@@ -178,13 +79,9 @@
             const date = $('#date').val();
             const zoneType = $('#zoneType').val();
 
-            // Показываем спиннер и скрываем содержимое
             $('#loadingSpinner').show();
             $('#chartContainer').hide();
-            $('#balanceInfo').hide();
-            $('#zoneStats').hide();
 
-            // Загружаем диаграмму
             $.ajax({
                 url: `/sankey-chart?date=${date}&zone_type=${zoneType}`,
                 method: 'GET',
@@ -193,91 +90,17 @@
                     $('#chartContainer').show();
                     $('#loadingSpinner').hide();
                 },
-                error: function(xhr, status, error) {
+                error: function(xhr) {
                     $('#loadingSpinner').hide();
                     $('#chartContent').html(`
-                        <div class="alert alert-danger" role="alert">
-                            <i class="bi bi-exclamation-triangle-fill"></i>
-                            Ошибка загрузки диаграммы: ${xhr.responseText || error}
+                        <div class="alert alert-danger">
+                            Ошибка загрузки диаграммы: ${xhr.responseText || 'Неизвестная ошибка'}
                         </div>
                     `);
                     $('#chartContainer').show();
                 }
             });
-
-            // Загружаем дополнительную информацию
-            $.ajax({
-                url: `/api/sankey-data?date=${date}&zone_type=${zoneType}`,
-                method: 'GET',
-                success: function(response) {
-                    if (response.success) {
-                        // Отображаем баланс
-                        if (response.balance) {
-                            const balanceHtml = response.balance.split('\n').map(line => 
-                                `<div>${line}</div>`
-                            ).join('');
-                            $('#balanceContent').html(balanceHtml);
-                            $('#balanceInfo').show();
-                        }
-
-                        // Отображаем статистику по зонам
-                        if (response.data && response.data.nodes) {
-                            const nodes = response.data.nodes;
-                            const links = response.data.links;
-                            
-                            // Собираем статистику по въездам и выездам для каждой зоны
-                            const zoneStats = {};
-                            nodes.forEach(node => {
-                                if (node !== 'Въезд' && node !== 'Выезд') {
-                                    zoneStats[node] = {
-                                        entries: 0,
-                                        exits: 0,
-                                        total: 0
-                                    };
-                                }
-                            });
-
-                            links.forEach(link => {
-                                if (link.from_zone === 'Въезд' && link.to_zone in zoneStats) {
-                                    zoneStats[link.to_zone].entries += link.value;
-                                    zoneStats[link.to_zone].total += link.value;
-                                }
-                                if (link.from_zone in zoneStats && link.to_zone === 'Выезд') {
-                                    zoneStats[link.from_zone].exits += link.value;
-                                    zoneStats[link.from_zone].total += link.value;
-                                }
-                            });
-
-                            // Сортируем зоны по общему количеству
-                            const sortedZones = Object.entries(zoneStats)
-                                .sort((a, b) => b[1].total - a[1].total);
-
-                            let statsHtml = '';
-                            sortedZones.forEach(([zone, stats]) => {
-                                if (stats.total > 0) {
-                                    statsHtml += `
-                                        <div class="zone-stat-item">
-                                            <span class="zone-name">${zone}</span><br>
-                                            <span class="text-success">⬆ ${stats.entries}</span>
-                                            <span class="text-danger">⬇ ${stats.exits}</span>
-                                            <span class="zone-count">| Всего: ${stats.total}</span>
-                                        </div>
-                                    `;
-                                }
-                            });
-
-                            if (statsHtml) {
-                                $('#zoneStatsContent').html(statsHtml);
-                                $('#zoneStats').show();
-                            }
-                        }
-                    }
-                }
-            });
         }
     </script>
-
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
 </body>
 </html>
