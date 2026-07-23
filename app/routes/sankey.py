@@ -113,7 +113,6 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
         })
 
     logger.info(f"{__name__} nodes: \n {nodes} \n links {updated_links}")
-    
     return {'nodes': nodes, 'links': updated_links}
 
 
@@ -128,6 +127,7 @@ def create_sankey_chart(
     
     if not sankey_data['nodes'] or not sankey_data['links']:
         fig = go.Figure()
+
         fig.update_layout(
             title={
                 'text': f'Нет данных для отображения за {date}',
@@ -136,6 +136,7 @@ def create_sankey_chart(
                 },
             height=400
             )
+
         return fig
 
     node_labels = sankey_data['nodes']
