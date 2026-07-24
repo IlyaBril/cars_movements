@@ -53,7 +53,19 @@ async def get_sankey_chart(date: str = Query(default=default_date()), zone_type:
                 return HTMLResponse(content="<h3>Нет данных за выбранную дату</h3>")
 
         fig = create_sankey_chart(df, date, allowed_zones, zone_type)
-        return HTMLResponse(content=fig.to_html(full_html=False))
+        content = fig.to_html(
+            full_html=False,
+            include_plotlyjs=True,
+            config={
+                'responsive': True,
+                'autosizable': True,
+                'displayModeBar': True,
+                },
+            default_width='100%',
+            default_height='700px',
+            )
+        print(content)
+        return HTMLResponse(content=content)
     except Exception as e:
         logger.error(f"Ошибка создания Sankey диаграммы: {e}")
         return HTMLResponse(content=f"<h3>Ошибка: {str(e)}</h3>")
@@ -165,6 +177,6 @@ def create_sankey_chart(
     fig.update_layout(
         title={'text': f'Sankey диаграмма потоков за {date} {"(Зоны ретуши)" if zone_type == "rep" else "(Основные зоны)"}', 
                'y': 0.95, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'},
-        height=700, margin=dict(l=50, r=50, t=80, b=50)
+        autosize=True, width=None, height=700, margin=dict(l=50, r=50, t=80, b=50)
     )
     return fig

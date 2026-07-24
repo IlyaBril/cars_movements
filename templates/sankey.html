@@ -10,8 +10,21 @@
         body { background-color: #f8f9fa; }
         .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .card { border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        .chart-container { background: white; border-radius: 15px; padding: 20px; margin-top: 20px; }
+        .chart-container { 
+            background: white; 
+            border-radius: 15px; 
+            padding: 20px; 
+            margin-top: 20px;
+            width: 100%;
+            visibility: hidden; /* Скрываем, но сохраняем размеры */
+        }
         .loading-spinner { display: none; text-align: center; padding: 50px; }
+        #chartContent {
+            width: 100%;
+        }
+        #chartContent .plotly-graph-div {
+            width: 100% !important;
+        }
     </style>
 </head>
 <body>
@@ -61,7 +74,7 @@
             <p class="mt-2 text-muted">Загрузка данных...</p>
         </div>
 
-        <div id="chartContainer" class="chart-container" style="display: none;">
+        <div id="chartContainer" class="chart-container" style="visibility: hidden;">
             <div id="chartContent"></div>
         </div>
     </div>
@@ -80,15 +93,34 @@
             const zoneType = $('#zoneType').val();
 
             $('#loadingSpinner').show();
-            $('#chartContainer').hide();
+            $('#chartContainer').css('visibility', 'hidden');
 
             $.ajax({
                 url: `/sankey-chart?date=${date}&zone_type=${zoneType}`,
                 method: 'GET',
                 success: function(data) {
                     $('#chartContent').html(data);
-                    $('#chartContainer').show();
-                    $('#loadingSpinner').hide();
+                    
+                    // Используем requestAnimationFrame для точного timing
+                    requestAnimationFrame(function() {
+                        setTimeout(function() {
+                            var graphDiv = document.querySelector('.plotly-graph-div');
+                            if (graphDiv && typeof Plotly !== 'undefined') {
+                                // Принудительно изменяем размер
+                                Plotly.Plots.resize(graphDiv);
+                                
+                                // Даем время на применение resize
+                                requestAnimationFrame(function() {
+                                    // Теперь показываем
+                                    $('#chartContainer').css('visibility', 'visible');
+                                    $('#loadingSpinner').hide();
+                                });
+                            } else {
+                                $('#chartContainer').css('visibility', 'visible');
+                                $('#loadingSpinner').hide();
+                            }
+                        }, 50);
+                    });
                 },
                 error: function(xhr) {
                     $('#loadingSpinner').hide();
@@ -97,7 +129,7 @@
                             Ошибка загрузки диаграммы: ${xhr.responseText || 'Неизвестная ошибка'}
                         </div>
                     `);
-                    $('#chartContainer').show();
+                    $('#chartContainer').css('visibility', 'visible');
                 }
             });
         }
