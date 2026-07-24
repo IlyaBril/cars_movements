@@ -4,14 +4,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sankey Диаграмма потоков</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Подключение Bootstrap -->
+    <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
         body { background-color: #f8f9fa; }
         .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .card { border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        .chart-container { background: white; border-radius: 15px; padding: 20px; margin-top: 20px; }
+        .chart-container { 
+            background: white; 
+            border-radius: 15px; 
+            padding: 20px; 
+            margin-top: 20px;
+            width: 100%;
+            visibility: hidden;
+        }
         .loading-spinner { display: none; text-align: center; padding: 50px; }
+        #chartContent {
+            width: 100%;
+            height: auto;
+        }
+        #chartContent .plotly-graph-div {
+            width: 100% !important;
+            height: auto !important;
+        }
+        .js-plotly-plot {
+            width: 100% !important;
+            height: auto !important;
+        }
     </style>
 </head>
 <body>
@@ -61,7 +82,7 @@
             <p class="mt-2 text-muted">Загрузка данных...</p>
         </div>
 
-        <div id="chartContainer" class="chart-container" style="display: none;">
+        <div id="chartContainer" class="chart-container" style="visibility: hidden;">
             <div id="chartContent"></div>
         </div>
     </div>
@@ -80,15 +101,36 @@
             const zoneType = $('#zoneType').val();
 
             $('#loadingSpinner').show();
-            $('#chartContainer').hide();
+            $('#chartContainer').css('visibility', 'hidden');
 
             $.ajax({
                 url: `/sankey-chart?date=${date}&zone_type=${zoneType}`,
                 method: 'GET',
                 success: function(data) {
                     $('#chartContent').html(data);
-                    $('#chartContainer').show();
-                    $('#loadingSpinner').hide();
+                    
+                    requestAnimationFrame(function() {
+                        setTimeout(function() {
+                            var graphDiv = document.querySelector('.plotly-graph-div');
+                            if (graphDiv && typeof Plotly !== 'undefined') {
+                                // Обновляем layout с autosize
+                                Plotly.relayout(graphDiv, {
+                                    autosize: true,
+                                    height: undefined  // Убираем фиксированную высоту
+                                });
+                                
+                                Plotly.Plots.resize(graphDiv);
+                                
+                                requestAnimationFrame(function() {
+                                    $('#chartContainer').css('visibility', 'visible');
+                                    $('#loadingSpinner').hide();
+                                });
+                            } else {
+                                $('#chartContainer').css('visibility', 'visible');
+                                $('#loadingSpinner').hide();
+                            }
+                        }, 50);
+                    });
                 },
                 error: function(xhr) {
                     $('#loadingSpinner').hide();
@@ -97,7 +139,7 @@
                             Ошибка загрузки диаграммы: ${xhr.responseText || 'Неизвестная ошибка'}
                         </div>
                     `);
-                    $('#chartContainer').show();
+                    $('#chartContainer').css('visibility', 'visible');
                 }
             });
         }
