@@ -111,6 +111,7 @@ class DataService:
         df_transformed = df_transformed.sort_values(['Заказ', 'Дата'])
         df_transformed['next_zone'] = df_transformed.groupby('Заказ')['Точка регистрации'].shift(-1)
         df_transformed['exit_time'] = df_transformed.groupby('Заказ')['Дата'].shift(-1)
+        df_transformed['exit_id'] = df_transformed.groupby('Заказ')['id'].shift(-1) #delete
         
         # Удаление дубликатов (последовательных одинаковых зон)
         mask = df_transformed['Точка регистрации'] == df_transformed['next_zone']
