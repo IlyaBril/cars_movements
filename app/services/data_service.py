@@ -96,28 +96,35 @@ class DataService:
         return zones, zones_rep, zone_to_group, all_entities
 
     def _transform_dataframe(self, df: pd.DataFrame, zone_to_group: Dict[str, str]) -> pd.DataFrame:
-        """Трансформация DataFrame: замена зон на группы и обработка дубликатов"""
+        """Трансформация DataFrame: замена зон на группы и удаление дубликатов
+        Args:
+        df_transformed (pd.DataFrame): Датафрейм с колонками 'Точка регистрации' и 'Заказ'.
+                                       Датафрейм должен быть отсортирован по времени.
+        Returns:
+        pd.DataFrame: Отфильтрованный датафрейм с перезаписанными индексами.
+                      Содержит только строки, где изменилась точка или заказ.
+        """
+		
         df_transformed = df.copy()
-
         
         # Заменяем зоны на группы
-        logger.info(f'zones to group {zone_to_group}')
         if zone_to_group:
             df_transformed['Точка регистрации'] = df_transformed['Точка регистрации'].map(
                 lambda x: zone_to_group.get(x, x)
             )
-        
+
         # Сортировка и обработка дубликатов
         df_transformed = df_transformed.sort_values(['Заказ', 'Дата'])
-        df_transformed['next_zone'] = df_transformed.groupby('Заказ')['Точка регистрации'].shift(-1)
-        df_transformed['exit_time'] = df_transformed.groupby('Заказ')['Дата'].shift(-1)
-        
-        # Удаление дубликатов (последовательных одинаковых зон)
-        mask = df_transformed['Точка регистрации'] == df_transformed['next_zone']
-        df_transformed.loc[mask.shift(1).fillna(False), 'Дата'] = df_transformed.loc[mask, 'Дата'].values
-        df_transformed = df_transformed[~mask]
-        
-        # Добавляем часы
+        mask = (df_transformed['Точка регистрации'] != df_transformed['Точка регистрации'].shift()) | \
+           (df_transformed['Заказ'] != df_transformed['Заказ'].shift())
+        df_transformed = df_transformed[mask].reset_index(drop=True)
+    
+        # Создание next_zone и exit time
+        grouped_clean = df_transformed.groupby('Заказ')
+        df_transformed['next_zone'] = grouped_clean['Точка регистрации'].shift(-1).fillna('')
+        df_transformed['exit_time'] = grouped_clean['Дата'].shift(-1)
+                
+        # Добавление часов
         df_transformed['hour'] = df_transformed['Дата'].dt.hour
         df_transformed['next_hour'] = df_transformed['exit_time'].dt.hour
         
@@ -172,23 +179,17 @@ class DataService:
                 exits=exits_hours
             ))
         logger.info(f"zone_name {entity} \n entries {entries_hours}  \n exits {exits_hours}")
-
-        
+ 
         return result, "\n".join(balance_messages)
 
     def calculate_statistics(self, df: pd.DataFrame, date_filter: str, zone_type: str = "main") -> Tuple[List[ZoneStats], str]:
         """Основной метод - оркестрирует все шаги"""
-        # 1. Подготовка зон и маппинга
-        
+        # 1. Подготовка зон и маппинга       
         _, _, zone_to_group, all_entities = self._prepare_zones_and_mapping(zone_type, df)
                 
-        logger.debug(f"zone to group, {datetime.now()} {zone_to_group}")
-        logger.debug(f" all_entities, { all_entities}")
-        
         # 2. Трансформация DataFrame
         target_date = pd.Timestamp(date_filter).date()
         df_transformed = self._transform_dataframe(df, zone_to_group)
-        logger.info(f"{datetime.now()} zone to group, {zone_to_group}")
         
         # 3. Расчет почасовой статистики
         entries_pivot, exits_pivot = self._calculate_hourly_stats(
@@ -196,7 +197,6 @@ class DataService:
         )
         logger.debug(f"entries_pivot ________ {entries_pivot}")
         logger.debug(f"exits_pivot ___________ {exits_pivot}")
-        logger.debug(f"all_entities {all_entities}")
         
         # 4. Формирование результата
         return self._build_result(entries_pivot, exits_pivot, all_entities, zone_type)

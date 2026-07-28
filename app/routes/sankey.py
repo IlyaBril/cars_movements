@@ -19,14 +19,16 @@ ZONE_POSITIONS = {
     'M440. GRT': {'x': 0.05, 'y': 0.5, 'color': '#FF6B6B'},
     'М444_М446 Валидация': {'x': 0.3, 'y': 0.2, 'color': '#45B7D1'},
     'M450. Контроль электрики': {'x': 0.6, 'y': 0.2, 'color': '#DDA0DD'},
-    'M470. Передача на СГП (BLAN)': {'x': 0.95, 'y': 0.2, 'color': '#DDA0DD'}, 
+    'M470. Передача на СГП (BLAN)': {'x': 0.8, 'y': 0.2, 'color': '#DDA0DD'}, 
     'ТиД': {'x': 0.2, 'y': 0.6, 'color': '#4ECDC4'},
-    'M471. Отказ по качеству': {'x': 0.75, 'y': 0.5, 'color': '#96CEB4'},
-    'M445. Зона выборочного контроля': {'x': 0.45, 'y': 0.5, 'color': '#FFEAA7'},
-    
-    
+    'M471. Отказ по качеству': {'x': 0.4, 'y': 0.6, 'color': '#96CEB4'},
+    'M445. Зона выборочного контроля': {'x': 0.55, 'y': 0.5, 'color': '#FFEAA7'},
+    'M422. Некомплекты': {'x': 0.95, 'y': 0.7, 'color': '#FFEAA7'},
+    'M500. Приемка на СГП (MADU)': {'x': 0.95, 'y': 0.3, 'color': '#FFEAA7'},
+    'M483. Чистые автомобили': {'x': 0.95, 'y': 0.4, 'color': '#FFEAA7'},
 }
 
+ADDITINAL_ZONES = ['M422. Некомплекты', 'M500. Приемка на СГП (MADU)', 'M483. Чистые автомобили']
 
 def default_date():
     return datetime.today().strftime("%Y-%m-%d")
@@ -67,60 +69,88 @@ async def get_sankey_chart(date: str = Query(default=default_date()), zone_type:
 
 
 def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dict:
-    target_date = pd.Timestamp(date).date()
+    """
+
+    """
+    allowed_zones = allowed_zones + ADDITINAL_ZONES
+    logger.info(f'{__name__} allowed extended {allowed_zones}')
+	
+    # Фильтрация по дате отчета
+    target_date = pd.Timestamp(date).date()	
     df_day = df[df['exit_time'].dt.date == target_date].copy()
-    df_filtered = df_day[df_day['next_zone'].isin(allowed_zones)]
     
+	# Фильтрация, отчетная зона существует или в Точки Регистрации, или next_zone
+    df_filtered = df_day[
+        df_day['next_zone'].isin(allowed_zones) |
+        df_day['Точка регистрации'].isin(allowed_zones)
+        ]
+
     if df_filtered.empty:
         return {'nodes': [], 'links': [], 'message': 'Нет данных'}
-
-    # Собираем все зоны и связи
-    all_zones = set()
-    links = {}
-    df_filtered = df_filtered.sort_values(['Заказ', 'exit_time'])
-
-    for order in df_filtered['Заказ'].unique():
-        zones = df_filtered[df_filtered['Заказ'] == order]['next_zone'].tolist()
-        for i in range(len(zones) - 1):
-            from_zone, to_zone = zones[i], zones[i+1]
-            all_zones.add(from_zone)
-            all_zones.add(to_zone)
-            link_key = f"{from_zone}->{to_zone}"
-            if link_key not in links:
-                links[link_key] = {'source': from_zone, 'target': to_zone, 'value': 0}
-            links[link_key]['value'] += 1
-
-    # Подсчет статистики входов и выходов
-    zone_stats = {zone: {'in': 0, 'out': 0} for zone in all_zones}
     
-    for link in links.values():
-        zone_stats[link['source']]['out'] += link['value']
-        zone_stats[link['target']]['in'] += link['value']
-
-    # Создаем узлы с обогащенными названиями
+    # Сортировка
+    df_transitions = df_filtered.sort_values(['Заказ', 'exit_time'])
+    
+    # Группировка и подсчет переходов
+    transition_counts = (df_transitions
+                        .groupby(['Точка регистрации', 'next_zone'])
+                        .size()
+                        .reset_index(name='count'))
+    
+    # Получаем все уникальные зоны в виде: 
+    # Точка регистрации next_zone  count
+    # Москва             Питер       2
+    # Москва             Казань      1
+    # Питер              Москва      1
+    
+    all_zones = pd.concat([
+        transition_counts['Точка регистрации'], 
+        transition_counts['next_zone']
+    ]).unique()
+	
+    logger.info(f'{__name__} transition_counts {transition_counts}')
+    logger.info(f'{__name__} all zones {all_zones}')
+    
+    # Считаем входы и выходы с помощью groupby
+	# Получаем словарь типа {'Москва': 2, 'Питер': 2, 'Казань': 1}
+    out_stats = (transition_counts
+                .groupby('Точка регистрации')['count']
+                .sum()
+                .to_dict())
+    
+    in_stats = (transition_counts
+               .groupby('next_zone')['count']
+               .sum()
+               .to_dict())
+    
+    logger.info(f'{__name__} in_stats {in_stats} \n out_stats {out_stats}')
+    
+	# 8. Создаем узлы
     nodes = []
     node_to_index = {}
     
-    for i, zone in enumerate(all_zones):
-        stats = zone_stats[zone]
-        # Формат с переносом строки
-        label = f"{zone}<br>(вх: {stats['in']}, вых: {stats['out']})"
-        # Альтернативный компактный формат:
-        # label = f"{zone} [{stats['in']}→{stats['out']}]"
+    for i, zone in enumerate(sorted(allowed_zones)):
+        stats_in = in_stats.get(zone, 0)
+        stats_out = out_stats.get(zone, 0)
+        label = f"{zone}<br> (вх:{stats_in}, вых:{stats_out})"
         nodes.append(label)
         node_to_index[zone] = i
-
-    # Обновляем связи
-    updated_links = []
-    for link in links.values():
-        updated_links.append({
-            'source': node_to_index[link['source']],
-            'target': node_to_index[link['target']],
-            'value': link['value']
+    
+    logger.info(f'{__name__}  \n  >>> nodes {nodes} \n >>> node_to_index {node_to_index}')
+    
+	# 9. Создаем связи
+    links = []
+    for _, row in transition_counts.iterrows():
+        source = row['Точка регистрации']
+        target = row['next_zone']
+        if (source in allowed_zones and target in allowed_zones and source in node_to_index and target in node_to_index):
+            links.append({
+            'source': node_to_index[source],
+            'target': node_to_index[target],
+            'value': row['count']
         })
-
-    logger.info(f"{__name__} nodes: \n {nodes} \n links {updated_links}")
-    return {'nodes': nodes, 'links': updated_links}
+    logger.info(f'{__name__} links {links}')
+    return {'nodes': nodes, 'links': links, 'message': None}
 
 
 def create_sankey_chart(
