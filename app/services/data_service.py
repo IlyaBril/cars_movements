@@ -106,21 +106,35 @@ class DataService:
             df_transformed['Точка регистрации'] = df_transformed['Точка регистрации'].map(
                 lambda x: zone_to_group.get(x, x)
             )
+
+        
+
+        
         
         # Сортировка и обработка дубликатов
         df_transformed = df_transformed.sort_values(['Заказ', 'Дата'])
-        df_transformed['next_zone'] = df_transformed.groupby('Заказ')['Точка регистрации'].shift(-1)
-        df_transformed['exit_time'] = df_transformed.groupby('Заказ')['Дата'].shift(-1)
-        df_transformed['exit_id'] = df_transformed.groupby('Заказ')['id'].shift(-1) #delete
+        grouped = df_transformed.groupby('Заказ')
+        df_transformed['next_zone'] = grouped['Точка регистрации'].shift(-1)
+        df_transformed['exit_time'] = grouped['Дата'].shift(-1)
+
         
-        # Удаление дубликатов (последовательных одинаковых зон)
-        mask = df_transformed['Точка регистрации'] == df_transformed['next_zone']
-        df_transformed.loc[mask.shift(1).fillna(False), 'Дата'] = df_transformed.loc[mask, 'Дата'].values
-        df_transformed = df_transformed[~mask]
-        
+  
+        mask = (df_transformed['Точка регистрации'] != df_transformed['Точка регистрации'].shift()) | \
+           (df_transformed['Заказ'] != df_transformed['Заказ'].shift())
+
+        df_transformed = df_transformed[mask].reset_index(drop=True)
+    
+        # Пересчитываем next_zone и exit time ПОСЛЕ удаления дубликатов
+        grouped_clean = df_transformed.groupby('Заказ')
+        df_transformed['next_zone'] = grouped_clean['Точка регистрации'].shift(-1).fillna('')
+        df_transformed['exit_time'] = grouped_clean['Дата'].shift(-1)
+
+                
         # Добавляем часы
         df_transformed['hour'] = df_transformed['Дата'].dt.hour
         df_transformed['next_hour'] = df_transformed['exit_time'].dt.hour
+
+        df_transformed.to_excel('qwe.xlsx')
         
         return df_transformed
 
