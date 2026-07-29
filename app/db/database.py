@@ -2,14 +2,13 @@ from fastapi import Depends
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, scoped_session
 from sqlalchemy.pool import StaticPool
-from app.config import DB_FILE
+from app.config import DB_FILE, POSTGRES_DATABASE_URL
 from sqlalchemy.orm import Session, sessionmaker
 from typing import Annotated
 from .models import Base, ZonesConfig
 
 
 SQLITE_DATABASE_URL = f"sqlite:///{DB_FILE}"
-POSTGRES_DATABASE_URL = "postgresql://user:password@localhost/dbname"
 
 sqlite_engine = create_engine(
     SQLITE_DATABASE_URL,

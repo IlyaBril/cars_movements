@@ -7,6 +7,7 @@ from .db.repository import MovementRepository, GroupRepository
 from .db.models import Base
 from .config import STATIC_DIR
 from .routes import analysis, admin, admin_groups
+from .routes import analysis, admin, admin_groups, sankey
 
 
 @asynccontextmanager
@@ -27,6 +28,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(analysis.router)
 app.include_router(admin.router)
 app.include_router(admin_groups.router)
+app.include_router(sankey.router) 
 
 @app.get("/health")
 async def health_check():
