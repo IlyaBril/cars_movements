@@ -4,7 +4,6 @@ import json
 
 # Пути
 BASE_DIR = Path(__file__).parent.parent
-DB_FILE = BASE_DIR / "zones.db"
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
 
@@ -17,9 +16,7 @@ POSTGRES_PASSWORD = "your_password"
 
 # Настройки подключения
 POSTGRES_DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
-
-#Настройки сессий БД зон и данных
-
+DB_FILE = BASE_DIR / "zones.db"
 
 # Значения по умолчанию
 DEFAULT_ZONES = [

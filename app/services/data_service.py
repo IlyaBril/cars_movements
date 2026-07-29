@@ -1,8 +1,9 @@
 import json
 import pandas as pd
 import logging
-from fastapi import Depends
 from datetime import datetime, date
+from fastapi import Depends
+from io import BytesIO
 from typing import List, Tuple, Dict, Annotated
 from app.db.models import ZoneStats
 from app.db.repository import MovementRepository, GroupRepository
@@ -34,7 +35,13 @@ class DataService:
         self._psql_session.close()
     
     def get_data(self, date_filter=None) -> pd.DataFrame:
-        """Загрузка данных из SQLite"""
+        """
+           Загрузка данных из SQLite
+           Возвращает таблицу со всеми движениями VIN в таблице
+           на которые есть любое движение этого VIN в указанный день date_filter
+           Преобразует формат столбца Дата в %Y-%m-%d %H:%M:%S
+
+        """
         try:
             target_date = pd.Timestamp(date_filter).date()
             movements = self._movement_repo.get_data_from_db(target_date)
@@ -48,6 +55,34 @@ class DataService:
             
         except Exception as e:
             raise ValueError(f"Ошибка при чтении данных: {str(e)}")
+
+
+    def export_to_excel(self) -> Optional[bytes]:
+        """Экспортировать данные в Excel"""
+        try:
+            movements = self._movement_repo.get_data_from_db()
+            schema = MovementSchema(many=True)           
+            validated_data = schema.dump(movements)
+
+            df = pd.DataFrame(validated_data)
+            
+            if df.empty:
+                return None
+            
+            # Создаем Excel файл в памяти
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Данные', index=False)
+            
+            return output.getvalue()
+            
+        except Exception as e:
+            print(f"Ошибка экспорта: {e}")
+            return None
+                
+
+
+        
 
     def _prepare_zones_and_mapping(self, zone_type: str, df: pd.DataFrame) -> Tuple[List[str], List[str], Dict[str, str], List[str]]:
         """Подготовка списков зон и маппинга"""
@@ -90,28 +125,35 @@ class DataService:
         return zones, zones_rep, zone_to_group, all_entities
 
     def _transform_dataframe(self, df: pd.DataFrame, zone_to_group: Dict[str, str]) -> pd.DataFrame:
-        """Трансформация DataFrame: замена зон на группы и обработка дубликатов"""
+        """Трансформация DataFrame: замена зон на группы и удаление дубликатов
+        Args:
+        df_transformed (pd.DataFrame): Датафрейм с колонками 'Точка регистрации' и 'Заказ'.
+                                       Датафрейм должен быть отсортирован по времени.
+        Returns:
+        pd.DataFrame: Отфильтрованный датафрейм с перезаписанными индексами.
+                      Содержит только строки, где изменилась точка или заказ.
+        """
+		
         df_transformed = df.copy()
-
         
         # Заменяем зоны на группы
-        logger.info(f'zones to group {zone_to_group}')
         if zone_to_group:
             df_transformed['Точка регистрации'] = df_transformed['Точка регистрации'].map(
                 lambda x: zone_to_group.get(x, x)
             )
-        
+
         # Сортировка и обработка дубликатов
         df_transformed = df_transformed.sort_values(['Заказ', 'Дата'])
-        df_transformed['next_zone'] = df_transformed.groupby('Заказ')['Точка регистрации'].shift(-1)
-        df_transformed['exit_time'] = df_transformed.groupby('Заказ')['Дата'].shift(-1)
-        
-        # Удаление дубликатов (последовательных одинаковых зон)
-        mask = df_transformed['Точка регистрации'] == df_transformed['next_zone']
-        df_transformed.loc[mask.shift(1).fillna(False), 'Дата'] = df_transformed.loc[mask, 'Дата'].values
-        df_transformed = df_transformed[~mask]
-        
-        # Добавляем часы
+        mask = (df_transformed['Точка регистрации'] != df_transformed['Точка регистрации'].shift()) | \
+           (df_transformed['Заказ'] != df_transformed['Заказ'].shift())
+        df_transformed = df_transformed[mask].reset_index(drop=True)
+    
+        # Создание next_zone и exit time
+        grouped_clean = df_transformed.groupby('Заказ')
+        df_transformed['next_zone'] = grouped_clean['Точка регистрации'].shift(-1).fillna('')
+        df_transformed['exit_time'] = grouped_clean['Дата'].shift(-1)
+                
+        # Добавление часов
         df_transformed['hour'] = df_transformed['Дата'].dt.hour
         df_transformed['next_hour'] = df_transformed['exit_time'].dt.hour
         
@@ -119,18 +161,14 @@ class DataService:
 
     def _calculate_hourly_stats(self, df: pd.DataFrame, target_date: date, all_entities: List[str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Расчет почасовой статистики въездов и выездов"""
-        # Въезды
-        print('df - transformeed ', df[['Точка регистрации', 'Заказ', 'Дата', 'hour']])
+
+        # Въезды       
         enter_df = df[df['Дата'].dt.date == target_date]
-        print('enter_df ', enter_df[['Точка регистрации', 'Заказ', 'Дата', 'hour']])
         entries_pivot = pd.crosstab(
             enter_df['Точка регистрации'],
             enter_df['hour'],
             dropna=False
         ).reindex(columns=range(6, 24), fill_value=0)
-
-        logger.info(f"entries_pivot {entries_pivot}")
-        
         
         # Выезды
         exit_df = df[df['exit_time'].dt.date == target_date]
@@ -170,23 +208,17 @@ class DataService:
                 exits=exits_hours
             ))
         logger.info(f"zone_name {entity} \n entries {entries_hours}  \n exits {exits_hours}")
-
-        
+ 
         return result, "\n".join(balance_messages)
 
     def calculate_statistics(self, df: pd.DataFrame, date_filter: str, zone_type: str = "main") -> Tuple[List[ZoneStats], str]:
         """Основной метод - оркестрирует все шаги"""
-        # 1. Подготовка зон и маппинга
-        
+        # 1. Подготовка зон и маппинга       
         _, _, zone_to_group, all_entities = self._prepare_zones_and_mapping(zone_type, df)
                 
-        logger.debug(f"zone to group, {datetime.now()} {zone_to_group}")
-        logger.debug(f" all_entities, { all_entities}")
-        
         # 2. Трансформация DataFrame
         target_date = pd.Timestamp(date_filter).date()
         df_transformed = self._transform_dataframe(df, zone_to_group)
-        logger.info(f"{datetime.now()} zone to group, {zone_to_group}")
         
         # 3. Расчет почасовой статистики
         entries_pivot, exits_pivot = self._calculate_hourly_stats(
@@ -194,11 +226,37 @@ class DataService:
         )
         logger.debug(f"entries_pivot ________ {entries_pivot}")
         logger.debug(f"exits_pivot ___________ {exits_pivot}")
-        logger.debug(f"all_entities {all_entities}")
         
         # 4. Формирование результата
         return self._build_result(entries_pivot, exits_pivot, all_entities, zone_type)
 				
     def load_excel_to_db(self):
         return self._movement_repo.load_excel_to_db()
-		
+
+    def load_from_excel(self, file_content: bytes) -> Tuple[bool, str, int]:
+        try:
+            df = pd.read_excel(BytesIO(file_content), sheet_name=0)
+            schema = MovementSchema(many=True)
+            try:
+                validated_data = schema.load(df.to_dict('records'))
+            except ValidationError as err:
+                return False, f"Ошибка валидации: {err.messages}", 0
+            
+            result, msg, added = self._movement_repo.load_from_excel_to_db(validated_data)
+            return True, f"Загружено {added} записей из {len(df)}"
+            
+        except Exception as e:
+            self.session.rollback()
+            return False, f"Ошибка: {e}", 0
+
+
+
+
+    def clear_database(self) -> Tuple[bool, str]:
+        """Очистить базу данных"""
+        try:
+            count = self.repository.clear_all()
+            return True, f"Очищено {count} записей"
+        except Exception as e:
+            self.session.rollback()
+            return False, f"Ошибка очистки: {str(e)}"
