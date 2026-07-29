@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sankey Диаграмма потоков</title>
+    <!-- Подключение Bootstrap -->
+    <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body { background-color: #f8f9fa; }
+        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card { border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .chart-container { 
+            background: white; 
+            border-radius: 15px; 
+            padding: 20px; 
+            margin-top: 20px;
+            width: 100%;
+            visibility: hidden;
+        }
+        .loading-spinner { display: none; text-align: center; padding: 50px; }
+        #chartContent {
+            width: 100%;
+            height: auto;
+        }
+        #chartContent .plotly-graph-div {
+            width: 100% !important;
+            height: auto !important;
+        }
+        .js-plotly-plot {
+            width: 100% !important;
+            height: auto !important;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">📊 Система анализа потоков</a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/">Главная</a>
+                <a class="nav-link active" href="/sankey">Sankey</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">📊 Sankey Диаграмма потоков</h5>
+                        <p class="card-text text-muted">Визуализация перемещений между зонами за выбранный день</p>
+                        
+                        <form id="sankeyForm" class="row g-3 mt-3">
+                            <div class="col-md-4">
+                                <label for="date" class="form-label">Дата</label>
+                                <input type="date" class="form-control" id="date" value="{{ default_date }}" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="zoneType" class="form-label">Тип зон</label>
+                                <select class="form-select" id="zoneType">
+                                    <option value="main">Основные зоны</option>
+                                    <option value="rep">Зоны ретуши</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary w-100">Построить диаграмму</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="loadingSpinner" class="loading-spinner">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+            <p class="mt-2 text-muted">Загрузка данных...</p>
+        </div>
+
+        <div id="chartContainer" class="chart-container" style="visibility: hidden;">
+            <div id="chartContent"></div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            loadSankeyData();
+            $('#sankeyForm').on('submit', function(e) {
+                e.preventDefault();
+                loadSankeyData();
+            });
+        });
+
+        function loadSankeyData() {
+            const date = $('#date').val();
+            const zoneType = $('#zoneType').val();
+
+            $('#loadingSpinner').show();
+            $('#chartContainer').css('visibility', 'hidden');
+
+            $.ajax({
+                url: `/sankey-chart?date=${date}&zone_type=${zoneType}`,
+                method: 'GET',
+                success: function(data) {
+                    $('#chartContent').html(data);
+                    
+                    requestAnimationFrame(function() {
+                        setTimeout(function() {
+                            var graphDiv = document.querySelector('.plotly-graph-div');
+                            if (graphDiv && typeof Plotly !== 'undefined') {
+                                // Обновляем layout с autosize
+                                Plotly.relayout(graphDiv, {
+                                    autosize: true,
+                                    height: undefined  // Убираем фиксированную высоту
+                                });
+                                
+                                Plotly.Plots.resize(graphDiv);
+                                
+                                requestAnimationFrame(function() {
+                                    $('#chartContainer').css('visibility', 'visible');
+                                    $('#loadingSpinner').hide();
+                                });
+                            } else {
+                                $('#chartContainer').css('visibility', 'visible');
+                                $('#loadingSpinner').hide();
+                            }
+                        }, 50);
+                    });
+                },
+                error: function(xhr) {
+                    $('#loadingSpinner').hide();
+                    $('#chartContent').html(`
+                        <div class="alert alert-danger">
+                            Ошибка загрузки диаграммы: ${xhr.responseText || 'Неизвестная ошибка'}
+                        </div>
+                    `);
+                    $('#chartContainer').css('visibility', 'visible');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

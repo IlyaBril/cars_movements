@@ -10,3 +10,4 @@ class MovementSchema(Schema):
         data_key="Точка регистрации",
         attribute="Точка_регистрации",
         )
+    Номер = fields.Str(allow_none=True)

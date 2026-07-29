@@ -38,6 +38,7 @@ class Movement(Base):
     __tablename__ = 'movements'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
+    Номер = Column(String, unique=True, nullable=False)
     Дата = Column(DateTime)
     Заказ = Column(String)
     Точка_регистрации = Column(String, name="Точка регистрации")

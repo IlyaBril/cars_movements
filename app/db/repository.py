@@ -19,15 +19,6 @@ class MovementRepository:
     def __init__(self, session: Session = None):
         self.session = session
 
-    def get_data_from_db_backup(self, date=None):
-        """Получение всей таблицы из движений"""
-        try:
-            return self.session.query(Movement).all()
-
-        except SQLAlchemyError as e:
-            #Нужно добавить логирование ошибки
-            raise SQLAlchemyError(f"Ошибка при получении данных из таблицы Movement: {e}")
-
     def get_data_from_db (self, date=None):
         """Получение всей таблицы из движений"""
         try:
@@ -36,11 +27,9 @@ class MovementRepository:
                 orders_query = self.session.query(Movement.Заказ).filter(
                     func.date(Movement.Дата) == date
                     ).distinct()
-                print('orders_query', orders_query)
 
                 orders = orders_query.all()
-                
-  
+                 
                 # Извлекаем номера заказов
                 order_numbers = [order[0] for order in orders]
                 
@@ -69,6 +58,23 @@ class MovementRepository:
             ).all()
         
         return all_zones
+
+    def load_from_excel_to_db(self, file_content: list) -> Tuple[bool, str, int]:
+        """Добавление новых данных в таблицу.
+           Вставка существующих данных по столбцу Номер игнорируются
+        """
+        logger.info(f'{__name__} load_from_excel_to_db')
+        try:
+            stmt = sqlite_insert(Movement).values(validated_data)
+            stmt = stmt.on_conflict_do_nothing(index_elements=['number'])
+
+            with self.session.begin():  # Автоматический commit/rollback
+                result = self.session.execute(stmt, validated_data)
+
+            return True, f"Успешно добавлено {result.rowcount} записей", result.rowcount
+
+        except Exception as e:
+            return False, f"Ошибка загрузки: {str(e)}", 0
     
     def load_excel_to_db(self, excel_path: str = "Движение.xlsx") -> bool:
         """Загрузка данных из Excel в PostgreSQL"""
@@ -77,8 +83,8 @@ class MovementRepository:
             
             df = pd.read_excel(
                 excel_path,
-                sheet_name="Лист_1",
-                usecols=['Дата', 'Заказ', 'Точка регистрации']
+                sheet_name=0,
+                usecols=['Номер', 'Дата', 'Заказ', 'Точка регистрации']
             )
             
             df['Дата'] = pd.to_datetime(df['Дата'], format='%d.%m.%Y %H:%M:%S')
@@ -90,6 +96,7 @@ class MovementRepository:
             movements = []
             for _, row in df.iterrows():
                 movement = Movement(
+                    Номер=row['Номер'],
                     Дата=row['Дата'],
                     Заказ=row['Заказ'],
                     Точка_регистрации=row['Точка регистрации']
@@ -102,25 +109,6 @@ class MovementRepository:
                 self.session.add_all(movements[i:i+batch_size])
                 self.session.flush()
             
-            # Сохраняем метаданные
-            metadata_session = SQLiteSession()
-            try:
-                meta = metadata_session.query(Metadata).filter_by(key='last_update').first()
-                if meta:
-                    meta.value = datetime.now().isoformat()
-                else:
-                    metadata_session.add(Metadata(key='last_update', value=datetime.now().isoformat()))
-                
-                meta_rows = metadata_session.query(Metadata).filter_by(key='rows_count').first()
-                if meta_rows:
-                    meta_rows.value = str(len(df))
-                else:
-                    metadata_session.add(Metadata(key='rows_count', value=str(len(df))))
-                
-                metadata_session.commit()
-            finally:
-                metadata_session.close()
-            
             self.session.commit()
             print(f"✅ Загружено {len(df)} записей в базу данных")
             return True
@@ -129,19 +117,19 @@ class MovementRepository:
             self.session.rollback()
             print(f"❌ Ошибка загрузки: {e}")
             return False
-    
-    def get_last_update(self) -> Optional[str]:
-        """Получить время последнего обновления"""
-        metadata_session = SQLiteSession()
-        try:
-            meta = metadata_session.query(Metadata).filter_by(key='last_update').first()
-            return meta.value if meta else None
-        finally:
-            metadata_session.close()
-    
+ 
     def close(self):
         """Закрыть сессию"""
         self.session.close()
+
+
+    def clear_all(self) -> int:
+        """Очистить всю таблицу"""
+        count = self.session.query(Movement).count()
+        self.session.query(Movement).delete()
+        self.session.commit()
+        return count
+
 
 class GroupRepository:
     """Репозиторий для работы с группами (SQLite)"""
