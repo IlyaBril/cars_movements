@@ -1,15 +1,17 @@
 import json
 import pandas as pd
 import logging
-from fastapi import Depends
 from datetime import datetime, date
-from typing import List, Tuple, Dict, Annotated
+from fastapi import Depends
+from io import BytesIO
+from typing import List, Tuple, Dict, Annotated, Optional
 from app.db.models import ZoneStats
 from app.db.repository import MovementRepository, GroupRepository
 from app.db.database import SQLiteSession, PostgresSession
 from app.db.schemas import MovementSchema
 from app.services.zone_service import ZoneService
 from sqlalchemy.orm import Session
+from marshmallow import ValidationError 
 
 
 logging.basicConfig(level=logging.INFO)
@@ -54,6 +56,32 @@ class DataService:
             
         except Exception as e:
             raise ValueError(f"Ошибка при чтении данных: {str(e)}")
+
+
+    def export_to_excel(self) -> Optional[bytes]:
+        """Экспортировать данные в Excel"""
+        try:
+            movements = self._movement_repo.get_data_from_db()
+            schema = MovementSchema(many=True)           
+            validated_data = schema.dump(movements)
+
+            df = pd.DataFrame(validated_data)
+            logger.info(f'{__name__} validated data done')
+            if df.empty:
+                return None
+            
+            # Создаем Excel файл в памяти
+            output = BytesIO()
+            logger.info(f'{__name__} output')
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Данные', index=False)
+            logger.info(f'{__name__} to excel')
+            return output.getvalue()
+            
+        except Exception as e:
+            print(f"Ошибка экспорта: {e}")
+            return None                
+ 
 
     def _prepare_zones_and_mapping(self, zone_type: str, df: pd.DataFrame) -> Tuple[List[str], List[str], Dict[str, str], List[str]]:
         """Подготовка списков зон и маппинга"""
@@ -203,4 +231,45 @@ class DataService:
 				
     def load_excel_to_db(self):
         return self._movement_repo.load_excel_to_db()
-		
+
+    def load_from_excel(self, file_content: bytes) -> Tuple[bool, str, int]:
+        try:
+            df = pd.read_excel(
+                BytesIO(file_content),
+                sheet_name=0,
+                usecols=['Номер', 'Дата', 'Заказ', 'Точка регистрации']
+                )
+            df['Дата'] = pd.to_datetime(df['Дата'], format='%d.%m.%Y %H:%M:%S')
+
+            print(df)
+            schema = MovementSchema(many=True)
+            logger.info(f'{__name__} pd.read_excel done')
+            
+            validated_data = schema.load(df.to_dict('records'))
+
+        
+            logger.info(f'{__name__} data validation pass ok')
+        
+            try:
+                result, msg, added = self._movement_repo.load_from_excel_to_db(validated_data)
+                logger.info(f'{__name__} _movement_repo.load_from_excel_to_db ok {result} , {msg} , {added}')
+                return result, msg, added
+            except Exception as e:
+                # Логируем полную ошибку с traceback
+                logger.error(f'{__name__} Error in load_from_excel_to_db: {str(e)}', exc_info=True)
+                return False, f"Ошибка при сохранении в БД: {str(e)}", 0
+            
+        except Exception as e:
+            logger.error(f'{__name__} Unexpected error: {str(e)}', exc_info=True)
+            return False, f"Ошибка: {str(e)}", 0
+            
+
+    def clear_database(self) -> Tuple[bool, str]:
+        """Очистить базу данных"""
+        try:
+            count = self._movement_repo.clear_all()
+            return True, f"Очищено {count} записей"
+        
+        except Exception as e:
+            self.session.rollback()
+            return False, f"Ошибка очистки: {str(e)}"
