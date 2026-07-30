@@ -63,7 +63,8 @@ class MovementRepository:
         """Добавление новых данных в таблицу.
            Вставка существующих данных по столбцу Номер игнорируются
         """
-        
+        logger.info(f'{__name__} load_from_excel_to_db')
+
         try:
             stmt = sqlite_insert(Movement).values(validated_data)
             stmt = stmt.on_conflict_do_nothing(index_elements=['number'])

@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, date
 from fastapi import Depends
 from io import BytesIO
-from typing import List, Tuple, Dict, Annotated
+from typing import List, Tuple, Dict, Annotated, Optional
 from app.db.models import ZoneStats
 from app.db.repository import MovementRepository, GroupRepository
 from app.db.database import SQLiteSession, PostgresSession
@@ -249,13 +249,11 @@ class DataService:
             self.session.rollback()
             return False, f"Ошибка: {e}", 0
 
-
-
-
     def clear_database(self) -> Tuple[bool, str]:
         """Очистить базу данных"""
         try:
-            count = self.repository.clear_all()
+            count = self._movement_repo.clear_all()
+
             return True, f"Очищено {count} записей"
         except Exception as e:
             self.session.rollback()

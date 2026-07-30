@@ -230,6 +230,6 @@ def create_sankey_chart(
     fig.update_layout(
         title={'text': f'Sankey диаграмма потоков за {date} {"(Зоны ретуши)" if zone_type == "rep" else "(Основные зоны)"}', 
                'y': 0.95, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'},
-        autosize=True, width=None, height=700, margin=dict(l=50, r=50, t=80, b=50)
+        autosize=True, width=None, height=700, margin=dict(l=20, r=20, t=60, b=20)
     )
     return fig
