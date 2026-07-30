@@ -4,62 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Загрузка данных в базу</title>
+    <!-- Подключение Bootstrap (как в первом фронте) -->
+    <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        
-        .container {
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            padding: 40px;
-            max-width: 600px;
-            width: 100%;
-        }
-        
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 28px;
-        }
-        
-        .subtitle {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
+            background-color: #f8f9fa;
         }
         
         .upload-area {
-            border: 3px dashed #ddd;
-            border-radius: 12px;
+            border: 3px dashed #dee2e6;
+            border-radius: 0.5rem;
             padding: 40px 20px;
             text-align: center;
             transition: all 0.3s ease;
-            margin-bottom: 25px;
-            position: relative;
+            cursor: pointer;
+            background-color: white;
         }
         
         .upload-area:hover {
-            border-color: #667eea;
-            background: #f8f9ff;
+            border-color: #0d6efd;
+            background-color: #f8f9ff;
         }
         
         .upload-area.dragover {
-            border-color: #667eea;
-            background: #f0f4ff;
+            border-color: #0d6efd;
+            background-color: #e7f1ff;
         }
         
         .upload-icon {
@@ -68,13 +37,8 @@
             display: block;
         }
         
-        .upload-text {
-            color: #666;
-            font-size: 16px;
-        }
-        
         .upload-text strong {
-            color: #667eea;
+            color: #0d6efd;
             cursor: pointer;
         }
         
@@ -88,93 +52,29 @@
         
         .file-info {
             display: none;
-            background: #f0f4ff;
-            padding: 12px;
-            border-radius: 8px;
+            background: #e7f1ff;
+            padding: 10px 15px;
+            border-radius: 0.375rem;
             margin: 15px 0;
-            color: #333;
+            color: #0d6efd;
             font-size: 14px;
+            border-left: 4px solid #0d6efd;
         }
         
         .file-info.show {
             display: block;
         }
         
-        .btn-group {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-top: 20px;
-        }
-        
-        .btn-row {
-            display: flex;
-            gap: 12px;
-        }
-        
-        .btn {
-            flex: 1;
-            padding: 14px 24px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: center;
-        }
-        
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        
-        .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn-success {
-            background: linear-gradient(135deg, #56ab2f 0%, #a8e063 100%);
-            color: white;
-        }
-        
-        .btn-success:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(86, 171, 47, 0.4);
-        }
-        
-        .btn-danger {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-        }
-        
-        .btn-danger:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(245, 87, 108, 0.4);
-        }
-        
-        .btn-outline {
-            background: white;
-            color: #667eea;
-            border: 2px solid #667eea;
-        }
-        
-        .btn-outline:hover:not(:disabled) {
-            background: #667eea;
-            color: white;
-            transform: translateY(-2px);
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+            border-width: 0.2em;
         }
         
         .message {
-            margin-top: 20px;
+            margin-top: 15px;
             padding: 12px 16px;
-            border-radius: 8px;
+            border-radius: 0.375rem;
             display: none;
             font-size: 14px;
         }
@@ -184,91 +84,95 @@
         }
         
         .message.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+            background: #d1e7dd;
+            color: #0a3622;
+            border: 1px solid #a3cfbb;
         }
         
         .message.error {
             background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+            color: #58151c;
+            border: 1px solid #f1aeb5;
         }
         
         .message.info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-        
-        .spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 3px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 8px;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        @media (max-width: 600px) {
-            .container {
-                padding: 24px;
-            }
-            
-            .btn-row {
-                flex-direction: column;
-            }
-            
-            .upload-area {
-                padding: 24px 16px;
-            }
+            background: #cff4fc;
+            color: #055160;
+            border: 1px solid #9eeaf9;
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1>📊 Загрузка данных</h1>
-        <p class="subtitle">Загрузите Excel файл для импорта данных в базу</p>
-        
-        <div class="upload-area" id="uploadArea">
-            <span class="upload-icon">📁</span>
-            <div class="upload-text">
-                Перетащите файл сюда или <strong id="browseLink">выберите файл</strong>
-            </div>
-            <div style="font-size: 12px; color: #999; margin-top: 8px;">
-                Поддерживаются .xlsx и .xls
-            </div>
-            <input type="file" id="fileInput" accept=".xlsx,.xls">
-        </div>
-        
-        <div class="file-info" id="fileInfo">
-            <strong>Выбран файл:</strong> <span id="fileName"></span>
-        </div>
-        
-        <div class="btn-group">
-            <button class="btn btn-primary" id="uploadBtn" disabled>
-                📤 Загрузить в базу
-            </button>
-            
-            <div class="btn-row">
-                <button class="btn btn-danger" id="clearBtn">
-                    🗑️ Очистить базу
-                </button>
-                <button class="btn btn-success" id="exportBtn">
-                    📥 Выгрузить в Excel
-                </button>
+<body class="bg-light">
+    <div class="container-fluid py-3">
+        <!-- Верхняя панель с заголовком -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h1 class="h4 mb-0">Загрузка данных в базу</h1>
+                </div>
+                <p class="text-muted small mt-1 mb-0">Загрузите Excel файл (.xlsx, .xls) для импорта данных</p>
             </div>
         </div>
-        
-        <div class="message" id="message"></div>
+
+        <!-- Сообщение об ошибках/успехе -->
+        <div id="messageContainer" class="mb-2"></div>
+
+        <!-- Индикатор загрузки -->
+        <div id="loadingIndicator" class="alert alert-info d-none mb-2" role="alert">
+            <div class="d-flex align-items-center">
+                <div class="spinner-border spinner-border-sm me-2" role="status">
+                    <span class="visually-hidden">Загрузка...</span>
+                </div>
+                Выполняется операция...
+            </div>
+        </div>
+
+        <!-- Основная карточка -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body p-3">
+                        <!-- Область загрузки -->
+                        <div class="upload-area" id="uploadArea">
+                            <span class="upload-icon">📁</span>
+                            <div class="upload-text">
+                                Перетащите файл сюда или <strong id="browseLink">выберите файл</strong>
+                            </div>
+                            <div class="text-muted small mt-2">
+                                Поддерживаются .xlsx и .xls
+                            </div>
+                            <input type="file" id="fileInput" accept=".xlsx,.xls">
+                        </div>
+                        
+                        <!-- Информация о выбранном файле -->
+                        <div class="file-info" id="fileInfo">
+                            <strong>Выбран файл:</strong> <span id="fileName"></span>
+                        </div>
+                        
+                        <!-- Кнопки управления -->
+                        <div class="row g-2 mt-3">
+                            <div class="col-md-4">
+                                <button class="btn btn-primary w-100" id="uploadBtn" disabled>
+                                    📤 Загрузить
+                                </button>
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-danger w-100" id="clearBtn">
+                                    🗑️ Очистить
+                                </button>
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-success w-100" id="exportBtn">
+                                    📥 Выгрузить Excel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    
+
     <script>
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
@@ -278,29 +182,37 @@
         const uploadBtn = document.getElementById('uploadBtn');
         const clearBtn = document.getElementById('clearBtn');
         const exportBtn = document.getElementById('exportBtn');
-        const messageDiv = document.getElementById('message');
+        const messageContainer = document.getElementById('messageContainer');
+        const loadingIndicator = document.getElementById('loadingIndicator');
         
         let selectedFile = null;
-        
+
+        // Показать сообщение
         function showMessage(text, type = 'info') {
-            messageDiv.textContent = text;
-            messageDiv.className = `message show ${type}`;
+            const alertClass = type === 'error' ? 'alert-danger' : 
+                              type === 'success' ? 'alert-success' : 'alert-info';
+            messageContainer.innerHTML = `
+                <div class="alert ${alertClass} alert-dismissible fade show small mb-0" role="alert">
+                    ${text}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
         }
-        
+
         function hideMessage() {
-            messageDiv.className = 'message';
+            messageContainer.innerHTML = '';
         }
-        
-        function setLoading(btn, loading) {
-            if (loading) {
-                btn.disabled = true;
-                btn.innerHTML = '<span class="spinner"></span> Загрузка...';
-            } else {
-                btn.disabled = false;
-                btn.textContent = btn.dataset.originalText || 'Загрузить в базу';
-            }
+
+        // Показать/скрыть индикатор загрузки
+        function showLoading() {
+            loadingIndicator.classList.remove('d-none');
         }
-        
+
+        function hideLoading() {
+            loadingIndicator.classList.add('d-none');
+        }
+
+        // Обработка выбранного файла
         function handleFile(file) {
             if (!file) {
                 selectedFile = null;
@@ -326,27 +238,27 @@
             uploadBtn.disabled = false;
             hideMessage();
         }
-        
+
         // Клик по области загрузки
         browseLink.addEventListener('click', (e) => {
             e.stopPropagation();
             fileInput.click();
         });
-        
+
         uploadArea.addEventListener('click', () => {
             fileInput.click();
         });
-        
+
         // Drag and Drop
         uploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
             uploadArea.classList.add('dragover');
         });
-        
+
         uploadArea.addEventListener('dragleave', () => {
             uploadArea.classList.remove('dragover');
         });
-        
+
         uploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
             uploadArea.classList.remove('dragover');
@@ -354,13 +266,13 @@
                 handleFile(e.dataTransfer.files[0]);
             }
         });
-        
+
         fileInput.addEventListener('change', () => {
             if (fileInput.files.length > 0) {
                 handleFile(fileInput.files[0]);
             }
         });
-        
+
         // Загрузка файла
         uploadBtn.addEventListener('click', async () => {
             if (!selectedFile) return;
@@ -368,12 +280,13 @@
             const formData = new FormData();
             formData.append('file', selectedFile);
             
-            uploadBtn.dataset.originalText = 'Загрузить в базу';
-            setLoading(uploadBtn, true);
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Загрузка...';
+            showLoading();
             hideMessage();
             
             try {
-                const response = await fetch('/upload/upload', {
+                const response = await fetch('/upload', {
                     method: 'POST',
                     body: formData
                 });
@@ -388,23 +301,25 @@
             } catch (error) {
                 showMessage(`❌ Ошибка соединения: ${error.message}`, 'error');
             } finally {
-                setLoading(uploadBtn, false);
+                hideLoading();
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = '📤 Загрузить';
                 selectedFile = null;
                 fileInput.value = '';
                 fileInfo.classList.remove('show');
                 uploadBtn.disabled = true;
             }
         });
-        
+
         // Очистка базы
         clearBtn.addEventListener('click', async () => {
             if (!confirm('Вы уверены, что хотите очистить всю базу данных?')) {
                 return;
             }
             
-            clearBtn.dataset.originalText = 'Очистить базу';
             clearBtn.disabled = true;
-            clearBtn.innerHTML = '<span class="spinner"></span> Очистка...';
+            clearBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Очистка...';
+            showLoading();
             hideMessage();
             
             try {
@@ -422,16 +337,17 @@
             } catch (error) {
                 showMessage(`❌ Ошибка соединения: ${error.message}`, 'error');
             } finally {
+                hideLoading();
                 clearBtn.disabled = false;
-                clearBtn.textContent = clearBtn.dataset.originalText;
+                clearBtn.textContent = '🗑️ Очистить';
             }
         });
-        
+
         // Экспорт в Excel
         exportBtn.addEventListener('click', async () => {
-            exportBtn.dataset.originalText = 'Выгрузить в Excel';
             exportBtn.disabled = true;
-            exportBtn.innerHTML = '<span class="spinner"></span> Выгрузка...';
+            exportBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Выгрузка...';
+            showLoading();
             hideMessage();
             
             try {
@@ -457,10 +373,25 @@
             } catch (error) {
                 showMessage(`❌ Ошибка выгрузки: ${error.message}`, 'error');
             } finally {
+                hideLoading();
                 exportBtn.disabled = false;
-                exportBtn.textContent = exportBtn.dataset.originalText;
+                exportBtn.textContent = '📥 Выгрузить Excel';
             }
         });
+
+        // Автоматическое скрытие сообщений через 5 секунд (как в первом фронте)
+        setInterval(() => {
+            const alerts = messageContainer.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                if (!alert.querySelector('.btn-close')) {
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn-close';
+                    closeBtn.setAttribute('data-bs-dismiss', 'alert');
+                    alert.appendChild(closeBtn);
+                }
+            });
+        }, 1000);
     </script>
 </body>
 </html>

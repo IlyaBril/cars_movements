@@ -1,7 +1,7 @@
 import base64
 import logging
 from fastapi import APIRouter, UploadFile, File, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, Response
 from fastapi.templating import Jinja2Templates
 from io import BytesIO
 from app.services.data_service import DataService
@@ -48,6 +48,12 @@ async def upload_excel(file: UploadFile = File(...)):
 
         # Загружаем данные
         success, message, added_count = service.load_from_excel(file_content)
+
+        if not success:
+            # Если ошибка валидации - возвращаем 400
+            if "валидации" in message.lower():
+                raise HTTPException(status_code=400, detail=message)
+            raise HTTPException(status_code=500, detail=message)
         
         return JSONResponse({
             'success': success,
@@ -78,24 +84,19 @@ async def clear_database():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f'Ошибка: {str(e)}')
 
-    
+
 @router.get("/export/")
 async def export_excel():
-    """Выгрузка базы данных в Excel"""
     try:
         service = DataService()
         excel_data = service.export_to_excel()
-        logger.info(f'{__name__} excel data')
         
         if excel_data is None:
             raise HTTPException(status_code=404, detail='Нет данных для экспорта')
         
-        # Создаем BytesIO из данных
-        buffer = BytesIO(excel_data)
-        
-        # Возвращаем файл как StreamingResponse
-        return StreamingResponse(
-            buffer,
+        # ✅ Просто возвращаем Response с байтами
+        return Response(
+            content=excel_data,
             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             headers={'Content-Disposition': 'attachment; filename="export_database.xlsx"'}
         )
@@ -103,4 +104,6 @@ async def export_excel():
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f'Ошибка: {str(e)}')
+        logger.error(f'{__name__} export error: {e}')
+        raise HTTPException(status_code=500, detail=f'Ошибка экспорта: {str(e)}')
+        

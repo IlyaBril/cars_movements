@@ -1,5 +1,6 @@
 import json
 import pandas as pd
+import logging
 from datetime import datetime
 from fastapi import Depends
 from typing import List, Tuple, Dict, Optional, Annotated
@@ -11,6 +12,9 @@ from sqlalchemy import func
 from .database import SQLiteSession, PostgresSession, get_sqlite_session
 from .models import Movement, Metadata, ZonesConfig, ZoneGroup
 
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class MovementRepository:
@@ -59,24 +63,39 @@ class MovementRepository:
         
         return all_zones
 
-    def load_from_excel_to_db(self, file_content: list) -> Tuple[bool, str, int]:
-        """Добавление новых данных в таблицу.
-           Вставка существующих данных по столбцу Номер игнорируются
-        """
-        logger.info(f'{__name__} load_from_excel_to_db')
+    def load_from_excel_to_db(self, validated_data: list) -> Tuple[bool, str, int]:
+        """Быстрая загрузка больших объемов данных"""
+        
+        if not validated_data:
+            return False, "Нет данных", 0
 
         try:
-            stmt = sqlite_insert(Movement).values(validated_data)
-            stmt = stmt.on_conflict_do_nothing(index_elements=['number'])
+            batch_size = 1000  # Подберите под свой объем
+            inserted = 0
+            
+            with self.session.begin():
+                for i in range(0, len(validated_data), batch_size):
+                    batch = validated_data[i:i + batch_size]
+                    numbers = [r['Номер'] for r in batch]
+                    
+                    # Быстрая проверка существования
+                    existing = set(
+                        row[0] for row in self.session.query(Movement.Номер)
+                        .filter(Movement.Номер.in_(numbers)).all()
+                    )
+                    
+                    new_batch = [r for r in batch if r['Номер'] not in existing]
+                    
+                    if new_batch:
+                        self.session.bulk_insert_mappings(Movement, new_batch)
+                        inserted += len(new_batch)
+            
+            return True, f"Добавлено {inserted} записей", inserted
 
-            with self.session.begin():  # Автоматический commit/rollback
-                result = self.session.execute(stmt, validated_data)
+        except SQLAlchemyError as e:
+            return False, f"Ошибка: {str(e)}", 0
 
-            return True, f"Успешно добавлено {result.rowcount} записей", result.rowcount
-
-        except Exception as e:
-            return False, f"Ошибка загрузки: {str(e)}", 0
-    
+        
     def load_excel_to_db(self, excel_path: str = "Движение.xlsx") -> bool:
         """Загрузка данных из Excel в PostgreSQL"""
         try:
