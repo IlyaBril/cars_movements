@@ -77,21 +77,29 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
 	
     # Фильтрация по дате отчета
     target_date = pd.Timestamp(date).date()	
-    df_day = df[df['exit_time'].dt.date == target_date].copy()
+    
     
 	# Фильтрация, отчетная зона существует или в Точки Регистрации, или next_zone
-    df_filtered = df_day[
-        df_day['next_zone'].isin(allowed_zones) |
-        df_day['Точка регистрации'].isin(allowed_zones)
+    df_filtered = df[
+        df['next_zone'].isin(allowed_zones) |
+        df['Точка регистрации'].isin(allowed_zones)
         ]
 
     if df_filtered.empty:
         return {'nodes': [], 'links': [], 'message': 'Нет данных'}
     
-    # Сортировка
-    df_transitions = df_filtered.sort_values(['Заказ', 'exit_time'])
-    
-    # Группировка и подсчет переходов
+    # Подготовка DataFrame для подсчета входа и выхода
+    # Вход в Точку регистрации происходит во время регистрации этой точки
+    # Выход из Точки регистрации происходит во время регистрации следующей точки
+
+    df_enter = df[df['Дата'].dt.date == target_date].copy()
+    df_exit = df[df['exit_time'].dt.date == target_date].copy()
+      
+    # Подсчет количесива переходов между точками за день
+    # Фильтрация происходит по df_exit, т.к. выход из текущей точки в следующую
+    # происходит во время входа в следующую точку
+ 
+    df_transitions = df_exit.sort_values(['Заказ', 'exit_time'])
     transition_counts = (df_transitions
                         .groupby(['Точка регистрации', 'next_zone'])
                         .size()
@@ -112,20 +120,19 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
     logger.info(f'{__name__} all zones {all_zones}')
     
     # Считаем входы и выходы с помощью groupby
-	# Получаем словарь типа {'Москва': 2, 'Питер': 2, 'Казань': 1}
-    out_stats = (transition_counts
-                .groupby('Точка регистрации')['count']
-                .sum()
+    # Получаем словарь типа {'Москва': 2, 'Питер': 2, 'Казань': 1}
+
+    out_stats = (df_exit['Точка регистрации']
+                .value_counts()
                 .to_dict())
     
-    in_stats = (transition_counts
-               .groupby('next_zone')['count']
-               .sum()
+    in_stats = (df_enter['Точка регистрации']
+               .value_counts()
                .to_dict())
     
     logger.info(f'{__name__} in_stats {in_stats} \n out_stats {out_stats}')
     
-	# 8. Создаем узлы
+    # 8. Создаем узлы
     nodes = []
     node_to_index = {}
     
