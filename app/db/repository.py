@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import Depends
 from typing import List, Tuple, Dict, Optional, Annotated
 from sqlalchemy.orm import Session
-from sqlalchemy import text, distinct
+from sqlalchemy import text, distinct, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func
 
@@ -53,6 +53,11 @@ class MovementRepository:
             #Нужно добавить логирование ошибки
             raise SQLAlchemyError(f"Ошибка при получении данных из таблицы Movement: {e}")
     
+    def get_zones_types_repo(self):
+        zone_types = self.session.scalars(select(ZonesList.name)).all()
+        logger.info(f'{__name__} zone_types {zone_types}')
+        return zone_types
+
     def get_all_zones_from_db(self)-> list[tuple[str]]: 
         """Получение всех зон из движений"""
         all_zones = self.session.query(

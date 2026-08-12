@@ -4,7 +4,10 @@ from fastapi.templating import Jinja2Templates
 from app.services.data_service import DataService
 from app.services.zone_service import ZoneService
 from datetime import datetime
+import logging
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["analysis"])
 templates = Jinja2Templates(directory="templates")
@@ -17,12 +20,13 @@ def default_date():
 @router.get("/")
 def root(request: Request):
     """Главная страница с интерфейсом"""
-    
+        
     date = default_date()
-    print('root')
+    zone_types = data_service.get_zones_types()
+    logger.info(f'{__name__} zone_types {zone_types}')
     return templates.TemplateResponse(  
         request=request, name="index(bootstrap).html",
-        context={"default_date": date},
+        context={"default_date": date, "zone_types": zone_types},
         )
 
 
@@ -33,9 +37,10 @@ def analyze_zones(
 
 ):
     """API для анализа зон"""
+    
     try:
         df = data_service.get_data(date)
-        #print(f'{__name__} df ',df)
+        
         stats, balance = data_service.calculate_statistics(df, date, zone_type)
         print(f'{__name__} stats, balance ',stats, balance)
         result = []

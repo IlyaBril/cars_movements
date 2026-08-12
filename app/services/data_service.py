@@ -34,6 +34,10 @@ class DataService:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._sqlite_sesion.close()
         self._psql_session.close()
+		
+    def get_zones_types(self):
+        zones_types = self._movement_repo.get_zones_types_repo()	
+        return zones_types
     
     def get_data(self, date_filter=None) -> pd.DataFrame:
         """
