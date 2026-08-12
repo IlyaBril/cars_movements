@@ -33,6 +33,7 @@ ADDITINAL_ZONES = ['M422. Некомплекты', 'M500. Приемка на С
 def default_date():
     return datetime.today().strftime("%Y-%m-%d")
 
+
 @router.get("/sankey")
 async def sankey_page(request: Request):
     return templates.TemplateResponse(request=request, name="sankey.html", context={"default_date": default_date()})
@@ -40,11 +41,13 @@ async def sankey_page(request: Request):
 
 @router.get("/sankey-chart")
 async def get_sankey_chart(date: str = Query(default=default_date()), zone_type: str = Query(default="main")):
+    logger.info(f'{__name__} get sankey chart')
     try:
         data_service = DataService()
         with data_service:
             df = data_service.get_data(date)
-            _, _, zone_to_group, allowed_zones = data_service._prepare_zones_and_mapping(zone_type, df)
+            zone_to_group, allowed_zones = data_service._prepare_zones_and_mapping(zone_type, df)
+            logger.info(f'{__name__} zone to group and allowed zones {allowed_zones}')
             df = data_service._transform_dataframe(df, zone_to_group)
             if df.empty:
                 return HTMLResponse(content="<h3>Нет данных за выбранную дату</h3>")

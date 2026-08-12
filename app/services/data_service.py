@@ -85,20 +85,14 @@ class DataService:
 
     def _prepare_zones_and_mapping(self, zone_type: str, df: pd.DataFrame) -> Tuple[List[str], List[str], Dict[str, str], List[str]]:
         """Подготовка списков зон и маппинга"""
-        zones, zones_rep = self._group_repo.load_zones_from_db()
-        print(f"{__name__} - zones, zones_rep {zones} - {zones_rep}")        
-        if zone_type == "rep":
-            all_entities = zones_rep.copy()           
-        else:           
-            all_entities = zones.copy()
-
-        query = self._group_repo.load_groups_from_db(all_entities)
-        print(f"{__name__} - load_groups_from_db {query}")
+	
+        zones_list = self._movement_repo.get_zones_from_db(zone_type) 
+        zones_list = json.loads(zones_list)		
+        query = self._group_repo.load_groups_from_db(zones_list)
+        
         groups = {}
         for group in query:
-            print(f"{__name__} - group_name {group.group_name} zones {group.zones}")
             groups[group.group_name] = json.loads(group.zones)
-        print(f"{__name__} - groups {groups}")
 
         all_available_zones = df['Точка регистрации'].unique()
         zone_to_group = {}           
@@ -119,9 +113,8 @@ class DataService:
                 print(f"❌ Группа '{group_name}' пропущена. Нет доступных зон")
                 all_entities.remove(group_name)
     
-            print(f"Группы для замены: {zone_to_group}")
-        
-        return zones, zones_rep, zone_to_group, all_entities
+            print(f"Группы для замены: {zone_to_group}")      
+        return zone_to_group, zones_list
 
     def _transform_dataframe(self, df: pd.DataFrame, zone_to_group: Dict[str, str]) -> pd.DataFrame:
         """Трансформация DataFrame: замена зон на группы и удаление дубликатов
@@ -213,7 +206,7 @@ class DataService:
     def calculate_statistics(self, df: pd.DataFrame, date_filter: str, zone_type: str = "main") -> Tuple[List[ZoneStats], str]:
         """Основной метод - оркестрирует все шаги"""
         # 1. Подготовка зон и маппинга       
-        _, _, zone_to_group, all_entities = self._prepare_zones_and_mapping(zone_type, df)
+        zone_to_group, zones = self._prepare_zones_and_mapping(zone_type, df)
                 
         # 2. Трансформация DataFrame
         target_date = pd.Timestamp(date_filter).date()
@@ -221,13 +214,13 @@ class DataService:
         
         # 3. Расчет почасовой статистики
         entries_pivot, exits_pivot = self._calculate_hourly_stats(
-            df_transformed, target_date, all_entities
+            df_transformed, target_date, zones
         )
         logger.debug(f"entries_pivot ________ {entries_pivot}")
         logger.debug(f"exits_pivot ___________ {exits_pivot}")
         
         # 4. Формирование результата
-        return self._build_result(entries_pivot, exits_pivot, all_entities, zone_type)
+        return self._build_result(entries_pivot, exits_pivot, zones, zone_type)
 				
     def load_excel_to_db(self):
         return self._movement_repo.load_excel_to_db()
@@ -247,7 +240,6 @@ class DataService:
             
             validated_data = schema.load(df.to_dict('records'))
 
-        
             logger.info(f'{__name__} data validation pass ok')
         
             try:

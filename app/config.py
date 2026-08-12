@@ -7,15 +7,17 @@ BASE_DIR = Path(__file__).parent.parent
 STATIC_DIR = BASE_DIR / "static"
 TEMPLATES_DIR = BASE_DIR / "templates"
 
-# Настройки PostgreSQL (замените на свои)
+# Настройки PostgreSQL
 POSTGRES_HOST = "localhost"
 POSTGRES_PORT = 5432
-POSTGRES_DB = "your_database"
-POSTGRES_USER = "your_user"
-POSTGRES_PASSWORD = "your_password"
+POSTGRES_DB = "database"
+POSTGRES_USER = "user"
+POSTGRES_PASSWORD = "password"
 
 # Настройки подключения
 POSTGRES_DATABASE_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+
+# Настройки подключения sqlite
 DB_FILE = BASE_DIR / "zones.db"
 
 # Значения по умолчанию
@@ -37,6 +39,12 @@ DEFAULT_ZONES_REP = [
     'M414. Тяжелая ретушь Сборки',
     'M407. Ретушь замена деталей',
 ]
+
+
+DEFAULT_ZONES_LIST = {
+    'main': DEFAULT_ZONES,
+    'rep': DEFAULT_ZONES_REP,
+    }
 
 REQUIRED_COLUMNS = ['Дата', 'Заказ', 'Точка регистрации']
 

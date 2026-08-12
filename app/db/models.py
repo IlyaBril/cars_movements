@@ -58,6 +58,14 @@ class ZonesConfig(Base):
     zones = Column(Text, nullable=False)
     zones_rep = Column(Text, nullable=False)
     updated_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+	
+	
+class ZonesList(Base):
+    __tablename__ = 'zones'
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(Text, nullable=False)
+    zones = Column(Text, nullable=False)
 
 
 class ZoneGroup(Base):

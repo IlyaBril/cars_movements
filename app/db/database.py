@@ -5,7 +5,7 @@ from sqlalchemy.pool import StaticPool
 from app.config import DB_FILE, POSTGRES_DATABASE_URL
 from sqlalchemy.orm import Session, sessionmaker
 from typing import Annotated
-from .models import Base, ZonesConfig
+from .models import Base, ZonesConfig, ZonesList
 
 
 SQLITE_DATABASE_URL = f"sqlite:///{DB_FILE}"
@@ -33,8 +33,8 @@ def init_sqlite_database():
     # Добавляем начальные данные, если таблица пуста
     session = SQLiteSession()
     try:
-        if session.query(ZonesConfig).count() == 0:
-            from app.config import DEFAULT_ZONES, DEFAULT_ZONES_REP
+        if session.query(ZonesList).count() == 0:
+            from app.config import DEFAULT_ZONES, DEFAULT_ZONES_REP, DEFAULT_ZONES_LIST
             import json
             
             config = ZonesConfig(
@@ -43,6 +43,13 @@ def init_sqlite_database():
             )
             session.add(config)
             session.commit()
+			
+            zones_list = []
+            for name, zones in DEFAULT_ZONES_LIST.items():
+                zones_list.append(ZonesList(name=name, zones=json.dumps(zones, ensure_ascii=False)))
+            session.bulk_save_objects(zones_list)
+            session.commit()
+
     finally:
         session.close()
 

@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func
 
 from .database import SQLiteSession, PostgresSession, get_sqlite_session
-from .models import Movement, Metadata, ZonesConfig, ZoneGroup
+from .models import Movement, Metadata, ZonesConfig, ZoneGroup, ZonesList
 
 
 logging.basicConfig(level=logging.INFO)
@@ -62,6 +62,11 @@ class MovementRepository:
             ).all()
         
         return all_zones
+		
+    def get_zones_from_db(self, zones_list_name: str):
+        zones_list = self.session.query(ZonesList).filter_by(name=zones_list_name).first()
+        logger.info(f'{__name__} zones_list {zones_list.zones}')
+        return zones_list.zones
 
     def load_from_excel_to_db(self, validated_data: list) -> Tuple[bool, str, int]:
         """Быстрая загрузка больших объемов данных"""
@@ -188,6 +193,7 @@ class GroupRepository:
         query = self.session.query(ZoneGroup)
         if zone_names:
             query = query.filter(ZoneGroup.group_name.in_(zone_names))
+        logger.info(f'{__name__} - load_groups_from_db {query}')
         return query.order_by(ZoneGroup.group_name).all()
     
     def save_group_to_db(self, group_name: str, zones: List[str]) -> bool:
