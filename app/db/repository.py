@@ -58,6 +58,11 @@ class MovementRepository:
         logger.info(f'{__name__} zone_types {zone_types}')
         return zone_types
 
+    def get_dash_zones_repo(self) -> list[ZonesList]:
+        """Ф-ия возвращает сгруппированные зоны"""
+        return self.session.query(ZonesList).all()
+
+       
     def get_all_zones_from_db(self)-> list[tuple[str]]: 
         """Получение всех зон из движений"""
         all_zones = self.session.query(

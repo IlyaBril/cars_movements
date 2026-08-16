@@ -1,7 +1,12 @@
 import json
+import logging
 from typing import List, Tuple, Optional, Dict
 from app.db.repository import MovementRepository, GroupRepository
 from app.db.database import SQLiteSession, PostgresSession
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 class ZoneService:
     def __init__(self):
@@ -17,15 +22,17 @@ class ZoneService:
         self._sqlite_sesion.close()
         self._psql_session.close()
     
-    def get_zones(self) -> Tuple[List[str], List[str]]:
-        """Получить зоны из БД"""
-        zones, zones_rep = self._group_repo.load_zones_from_db()
-        print('Zone Srvice zones, zones_rep ', zones, zones_rep)
-        return zones, zones_rep
-    
     def update_zones(self, zones: List[str], zones_rep: List[str]) -> None:
         """Обновить зоны в БД"""
         self._group_repo.save_zones_to_db(zones, zones_rep)
+
+    def get_dash_zones(self) -> Dict[str, List[str]]:
+        query = self._movement_repo.get_dash_zones_repo()
+        zones = {}
+        for zone in query:
+            zones[zone.name] = json.loads(zone.zones)
+        logger.info(f'{__name__} dash zones {zones}')
+        return zones
     
     def get_groups(self,
         zone_names: Optional[List[str]] = None,
@@ -69,3 +76,11 @@ class ZoneService:
             group_name, zones
             )
         return result
+
+# УДАЛИТЬ
+
+    def get_zones(self) -> Tuple[List[str], List[str]]:
+        """Получить зоны из БД"""
+        zones, zones_rep = self._group_repo.load_zones_from_db()
+        print('Zone Srvice zones, zones_rep ', zones, zones_rep)
+        return zones, zones_rep

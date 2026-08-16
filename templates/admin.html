@@ -3,57 +3,322 @@
 <head>
     <title>Админ‑панель — Управление зонами</title>
     <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
+    <style>
+        .zone-card {
+            border-left: 4px solid #0d6efd;
+            margin-bottom: 10px;
+        }
+        .zone-card .card-header {
+            background-color: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .zone-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        .zone-items .badge {
+            font-size: 0.75rem;
+        }
+        .empty-state {
+            padding: 20px;
+            text-align: center;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .zone-type-badge {
+            font-size: 0.8rem;
+        }
+        .zone-list-textarea {
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+    </style>
 </head>
 <body class="bg-light">
     <div class="container py-4">
-        <h1 class="h4 mb-4">Управление зонами</h1>
-        <div class="mb-3">
-            <a href="/admin/groups/" class="btn btn-outline-primary btn-sm">Управление группами</a>
-        </div>
-
-        <div class="row">
-            <div class="col-md-6">
-                <div class="card mb-4">
-                    <div class="card-header">Основные зоны</div>
-                    <div class="card-body">
-                        <textarea id="zonesInput" class="form-control" rows="10">{{ '\n'.join(zones) }}</textarea>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h4">Управление зонами</h1>
+            <div>
+                <a href="/admin/groups/" class="btn btn-outline-secondary btn-sm">← Управление группами</a>
+                <a href="/" class="btn btn-outline-primary btn-sm">Главная</a>
             </div>
         </div>
-    </div>
 
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">Зоны ретуши</div>
+        <!-- Форма создания зоны -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Создать новую зону</h5>
+            </div>
             <div class="card-body">
-                <textarea id="zonesRepInput" class="form-control" rows="10">{{ '\n'.join(zones_rep) }}</textarea>
+                <div class="mb-3">
+                    <label for="zoneName" class="form-label">Название зоны</label>
+                    <input type="text" class="form-control" id="zoneName" placeholder="Например: Основные зоны">
+                </div>
+                
+                <div class="mb-3">
+                    <label for="zoneItems" class="form-label">
+                        Список зон (каждая с новой строки)
+                        <span class="zone-count">(введите названия зон)</span>
+                    </label>
+                    <textarea class="form-control zone-list-textarea" id="zoneItems" rows="5" placeholder="Зона 1&#10;Зона 2&#10;Зона 3"></textarea>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addExampleZones()">Пример зон</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearZoneItems()">Очистить</button>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Предпросмотр зон:</label>
+                    <div id="selectedZonesDisplay" class="selected-zones" style="background-color: #e7f3ff; padding: 10px; border-radius: 4px; min-height: 40px;">
+                        <span class="text-muted">Ничего не введено</span>
+                    </div>
+                </div>
+                
+                <button type="button" class="btn btn-primary" onclick="createZone()">Сохранить зону</button>
             </div>
         </div>
-    </div>
-</div>
 
-<div class="text-end">
-    <button class="btn btn-primary" onclick="saveZones()">Сохранить изменения</button>
-</div>
+        <!-- Список существующих зон -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Существующие зоны ({{ zones_list|length }})</h5>
+            </div>
+            <div class="card-body">
+                <div id="zonesList">
+                    {% if zones_list %}
+                        {% for zone in zones_list %}
+                        <div class="card zone-card">
+                            <div class="card-header">
+                                <strong>{{ zone.name }}</strong>
+                                <span class="badge bg-secondary zone-type-badge">
+                                    {{ zone.zones.split('\n')|length }} зон
+                                </span>
+                                <div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary me-2" onclick="editZone('{{ zone.id }}')">Редактировать</button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteZone('{{ zone.id }}')">Удалить</button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="zone-items">
+                                    {% for item in zone.zones.split('\n') %}
+                                        {% if item.strip() %}
+                                        <span class="badge bg-secondary">{{ item.strip() }}</span>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-state">
+                            <p class="mb-1">Нет созданных зон</p>
+                            <small class="text-muted">Создайте зону, заполнив форму выше</small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Сообщения -->
+        <div id="message" class="mt-3"></div>
+    </div>
 
 <script>
-async function saveZones() {
-    const zones = document.getElementById('zonesInput').value.split('\n').map(z => z.trim()).filter(z => z);
-    const zonesRep = document.getElementById('zonesRepInput').value.split('\n').map(z => z.trim()).filter(z => z);
+    let editingZoneId = null;
 
-    const response = await fetch('/admin/update_zones', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({zones, zones_rep: zonesRep})
+    // Обновление отображения выбранных зон
+    document.addEventListener('DOMContentLoaded', function() {
+        const textarea = document.getElementById('zoneItems');
+        textarea.addEventListener('input', updatePreview);
+        updatePreview();
     });
 
-    if (response.ok) {
-        alert('Зоны успешно сохранены!');
-    } else {
-        alert('Ошибка при сохранении зон');
+    function updatePreview() {
+        const textarea = document.getElementById('zoneItems');
+        const items = textarea.value.split('\n').map(z => z.trim()).filter(z => z);
+        
+        const display = document.getElementById('selectedZonesDisplay');
+        if (items.length === 0) {
+            display.innerHTML = '<span class="text-muted">Ничего не введено</span>';
+        } else {
+            display.innerHTML = items.map(z => 
+                `<span class="badge bg-primary me-1">${z}</span>`
+            ).join('');
+        }
     }
-}
+
+    function addExampleZones() {
+        const textarea = document.getElementById('zoneItems');
+        textarea.value = 'Зона А\nЗона Б\nЗона В\nЗона Г\nЗона Д';
+        updatePreview();
+    }
+
+    function clearZoneItems() {
+        document.getElementById('zoneItems').value = '';
+        updatePreview();
+    }
+
+    function showMessage(msg, type) {
+        const div = document.getElementById('message');
+        const alertClass = type === 'error' ? 'alert-danger' : 'alert-success';
+        div.innerHTML = `<div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+            ${msg}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+        setTimeout(() => {
+            div.innerHTML = '';
+        }, 5000);
+    }
+
+    async function createZone() {
+        const zoneName = document.getElementById('zoneName').value.trim();
+        if (!zoneName) {
+            showMessage('Введите название зоны', 'error');
+            return;
+        }
+
+        const zoneItems = document.getElementById('zoneItems').value;
+        const items = zoneItems.split('\n').map(z => z.trim()).filter(z => z);
+
+        if (items.length === 0) {
+            showMessage('Введите хотя бы одну зону', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch('/admin/zones/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: zoneName,
+                    zones: zoneItems
+                })
+            });
+
+            const result = await response.json();
+            if (response.ok) {
+                showMessage(result.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showMessage(result.detail || 'Ошибка при сохранении', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showMessage('Ошибка соединения с сервером', 'error');
+        }
+    }
+
+    async function deleteZone(zoneId) {
+        if (!confirm(`Удалить эту зону?`)) return;
+
+        try {
+            const response = await fetch(`/admin/zones/${zoneId}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+            if (response.ok) {
+                showMessage(result.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showMessage(result.detail || 'Ошибка при удалении', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showMessage('Ошибка соединения с сервером', 'error');
+        }
+    }
+
+    async function editZone(zoneId) {
+        try {
+            const response = await fetch(`/admin/zones/${zoneId}`);
+            const data = await response.json();
+            
+            if (!response.ok) {
+                showMessage('Ошибка загрузки данных', 'error');
+                return;
+            }
+            
+            // Загружаем данные в форму
+            document.getElementById('zoneName').value = data.name;
+            document.getElementById('zoneItems').value = data.zones;
+            updatePreview();
+            
+            editingZoneId = zoneId;
+            
+            // Меняем кнопку на "Обновить"
+            const saveBtn = document.querySelector('.btn-primary');
+            saveBtn.textContent = 'Обновить зону';
+            saveBtn.onclick = updateZone;
+            
+            showMessage(`Редактирование зоны "${data.name}"`, 'success');
+            document.querySelector('.card:first-child').scrollIntoView({ behavior: 'smooth' });
+            
+        } catch (error) {
+            showMessage('Ошибка при загрузке данных', 'error');
+        }
+    }
+
+    async function updateZone() {
+        if (!editingZoneId) return;
+        
+        const zoneName = document.getElementById('zoneName').value.trim();
+        if (!zoneName) {
+            showMessage('Введите название зоны', 'error');
+            return;
+        }
+
+        const zoneItems = document.getElementById('zoneItems').value;
+        const items = zoneItems.split('\n').map(z => z.trim()).filter(z => z);
+
+        if (items.length === 0) {
+            showMessage('Введите хотя бы одну зону', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/admin/zones/${editingZoneId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: zoneName,
+                    zones: zoneItems
+                })
+            });
+
+            const result = await response.json();
+            if (response.ok) {
+                showMessage(result.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showMessage(result.detail || 'Ошибка при обновлении', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showMessage('Ошибка соединения с сервером', 'error');
+        }
+    }
+
+    // Сброс формы при загрузке
+    document.addEventListener('DOMContentLoaded', function() {
+        // Если есть параметр reset в URL, сбрасываем форму
+        if (window.location.search.includes('reset')) {
+            document.getElementById('zoneName').value = '';
+            document.getElementById('zoneItems').value = '';
+            updatePreview();
+            const saveBtn = document.querySelector('.btn-primary');
+            saveBtn.textContent = 'Сохранить зону';
+            saveBtn.onclick = createZone;
+            editingZoneId = null;
+        }
+    });
 </script>
 </body>
 </html>

@@ -26,11 +26,10 @@ async def groups_page(request: Request):
 
     groups = zone_service.get_groups()
     print(f"{__name__} Существующие группы: {groups}")
-    available_zones = zone_service.get_available_zones()
+    available_zones = zone_service.get_zones()
         
     # Получаем все зоны для отображения (включая занятые)
     print(f"{__name__} available zones: {available_zones}")
-    
     
     return templates.TemplateResponse(
         request=request, 
@@ -46,6 +45,23 @@ async def groups_page(request: Request):
 
 @router.get("/edit/{group_name}")
 async def get_edit_data(group_name: str):
+    """Данные для редактирования группы"""
+    groups = zone_service.get_groups()
+    if group_name not in groups:
+        raise HTTPException(status_code=404, detail="Группа не найдена")
+    
+    # Получаем доступные зоны (включая зоны редактируемой группы)
+    available_zones = zone_service.get_available_zones(editing_group=group_name)
+    print('get_edit_data available_zones', available_zones)
+    print('get_edit_data current_zones', groups[group_name])
+    return {
+        "available_zones": available_zones,
+        "current_zones": groups[group_name]
+    }
+
+
+@router.get("/edit/{group_name}")
+async def get_edit_zones_data(group_name: str):
     """Данные для редактирования группы"""
     groups = zone_service.get_groups()
     if group_name not in groups:
@@ -105,3 +121,28 @@ async def delete_group(group_name: str):
             raise HTTPException(status_code=404, detail="Группа не найдена")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# MOVE TO SEPARATE FILE admin_zones.py
+
+@router.get("/zones", response_class=HTMLResponse)
+async def zones_page(request: Request):
+    """Получить все группы"""
+
+    dash_boards = zone_service.get_dash_zones()
+
+    groups = list(zone_service.get_groups().keys())
+    zones = zone_service.get_available_zones()
+    all_zones = groups + zones
+    print(f"{__name__} dash_boards: {dash_boards}")
+    
+    return templates.TemplateResponse(
+        request=request, 
+        name="admin_zones.html",
+        context={
+            "request": request,
+            "all_zones": all_zones,  # Передаем все зоны
+            "groups": dash_boards,
+            "groups_json": json.dumps(groups)
+            }
+        )
