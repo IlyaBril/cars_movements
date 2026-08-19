@@ -4,9 +4,6 @@
     <title>Управление Отчетами</title>
     <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
     <style>
-        .zone-checkbox {
-            margin-right: 10px;
-        }
         .group-card {
             border-left: 4px solid #0d6efd;
             margin-bottom: 10px;
@@ -25,25 +22,72 @@
         .group-zones .badge {
             font-size: 0.75rem;
         }
-        .selected-zones {
-            background-color: #e7f3ff;
-            padding: 10px;
+        .zone-transfer-container {
+            display: flex;
+            gap: 15px;
+            align-items: stretch;
+            min-height: 300px;
+        }
+        .zone-panel {
+            flex: 1;
+            border: 1px solid #dee2e6;
             border-radius: 4px;
-            min-height: 40px;
+            padding: 10px;
+            background: #fff;
+        }
+        .zone-panel .panel-header {
+            font-weight: 600;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
         }
         .zone-list {
-            max-height: 400px;
+            max-height: 350px;
             overflow-y: auto;
+            padding: 0;
+            margin: 0;
         }
-        .zone-count {
-            font-size: 0.85rem;
-            color: #6c757d;
+        .zone-list .list-group-item {
+            cursor: pointer;
+            padding: 6px 12px;
+            border: none;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.9rem;
+        }
+        .zone-list .list-group-item:hover {
+            background-color: #e7f3ff;
+        }
+        .zone-list .list-group-item.selected {
+            background-color: #cfe2ff;
+        }
+        .zone-controls {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 10px;
+            padding: 0 5px;
+        }
+        .zone-controls .btn {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
         }
         .empty-state {
             padding: 20px;
             text-align: center;
             background-color: #f8f9fa;
             border-radius: 4px;
+            color: #6c757d;
+        }
+        .zone-count {
+            font-size: 0.85rem;
+            color: #6c757d;
         }
     </style>
 </head>
@@ -60,7 +104,7 @@
         <!-- Форма создания группы -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">Создать новую группу</h5>
+                <h5 class="mb-0" id="formTitle">Создать новую группу</h5>
             </div>
             <div class="card-body">
                 <div class="mb-3">
@@ -71,47 +115,60 @@
                 <div class="mb-3">
                     <label class="form-label">
                         Выберите зоны для отчета
-                        <span class="zone-count">(доступно: {{ all_zones|length }})</span>
+                        <span class="zone-count">(всего: {{ all_zones|length }})</span>
                     </label>
-                    <div class="border p-3 rounded zone-list">
-                        {% if all_zones %}
-                            {% for zone in all_zones %}
-                                <div class="form-check">
-                                    <input class="form-check-input zone-checkbox" type="checkbox" value="{{ zone }}" id="zone_{{ loop.index }}">
-                                    <label class="form-check-label" for="zone_{{ loop.index }}">
-                                        {{ zone }}
-                                    </label>
-                                </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="empty-state">
-                                <p class="mb-1">Нет доступных зон для создания групп.</p>
-                                <small class="text-muted">
-                                    {% if groups %}
-                                        Все зоны из данных уже распределены по группам.
-                                    {% else %}
-                                        Сначала загрузите данные через /load-data или добавьте зоны в админ-панели.
-                                    {% endif %}
-                                </small>
+                    
+                    <div class="zone-transfer-container">
+                        <!-- Левая панель: Доступные зоны -->
+                        <div class="zone-panel">
+                            <div class="panel-header">
+                                <span>Доступные зоны</span>
+                                <span class="zone-count" id="availableCount">{{ all_zones|length }}</span>
                             </div>
-                        {% endif %}
+                            <div class="zone-list" id="availableZones">
+                                {% if all_zones %}
+                                    {% for zone in all_zones %}
+                                        <div class="list-group-item" data-zone="{{ zone }}" onclick="selectZone(this, 'available')">
+                                            {{ zone }}
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="empty-state">
+                                        <p class="mb-1">Нет доступных зон</p>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Кнопки управления -->
+                        <div class="zone-controls">
+                            <button type="button" class="btn btn-primary" onclick="moveRight()" title="Добавить выбранные">
+                                <span style="font-size: 20px;">→</span>
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="moveLeft()" title="Удалить выбранные">
+                                <span style="font-size: 20px;">←</span>
+                            </button>
+                        </div>
+
+                        <!-- Правая панель: Выбранные зоны -->
+                        <div class="zone-panel">
+                            <div class="panel-header">
+                                <span>Выбранные зоны</span>
+                                <span class="zone-count" id="selectedCount">0</span>
+                            </div>
+                            <div class="zone-list" id="selectedZones">
+                                <div class="empty-state">
+                                    <p class="mb-1">Ничего не выбрано</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    {% if all_zones %}
-                    <div class="mt-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="selectAllZones()">Выбрать все</button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllZones()">Снять все</button>
-                    </div>
-                    {% endif %}
                 </div>
                 
-                <div class="mb-3">
-                    <label class="form-label">Выбранные зоны:</label>
-                    <div id="selectedZonesDisplay" class="selected-zones">
-                        <span class="text-muted">Ничего не выбрано</span>
-                    </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-primary" onclick="createGroup()">Сохранить отчет</button>
+                    <button type="button" class="btn btn-secondary" onclick="cancelEdit()">Отмена</button>
                 </div>
-                
-                <button type="button" class="btn btn-primary" onclick="createGroup()">Сохранить отчет</button>
             </div>
         </div>
 
@@ -157,44 +214,124 @@
 <script>
     // Данные групп из Python
     const groupsData = {{ groups_json|safe }};
-    let editingGroupName = null; // Переменная для хранения имени редактируемой группы
+    let editingGroupName = null;
     
-    // Обновление отображения выбранных зон
+    // Инициализация: копируем все зоны в доступные
+    let availableZones = [];
+    let selectedZones = [];
+
     document.addEventListener('DOMContentLoaded', function() {
-        const checkboxes = document.querySelectorAll('.zone-checkbox');
-        checkboxes.forEach(function(checkbox) {
-            checkbox.addEventListener('change', updateSelectedZones);
+        // Собираем зоны из DOM
+        const availItems = document.querySelectorAll('#availableZones .list-group-item');
+        availItems.forEach(item => {
+            availableZones.push(item.dataset.zone);
         });
         
-        updateSelectedZones();
+        // Инициализируем выбранные зоны (пустые)
+        updateCounts();
+        updateSelectedDisplay();
     });
 
-    function updateSelectedZones() {
-        const checkboxes = document.querySelectorAll('.zone-checkbox:checked');
-        const selected = Array.from(checkboxes).map(cb => cb.value);
+    function selectZone(element, panel) {
+        // Снимаем выделение со всех элементов в этой панели
+        const parentList = element.parentElement;
+        parentList.querySelectorAll('.list-group-item').forEach(el => {
+            el.classList.remove('selected');
+        });
+        element.classList.add('selected');
+    }
+
+    function getSelectedZone(panelId) {
+        const panel = document.getElementById(panelId);
+        const selected = panel.querySelector('.list-group-item.selected');
+        return selected ? selected.dataset.zone : null;
+    }
+
+    function moveRight() {
+        const zone = getSelectedZone('availableZones');
+        if (!zone) {
+            showMessage('Выберите зону для перемещения', 'error');
+            return;
+        }
         
-        const display = document.getElementById('selectedZonesDisplay');
-        if (selected.length === 0) {
-            display.innerHTML = '<span class="text-muted">Ничего не выбрано</span>';
+        // Перемещаем из доступных в выбранные
+        availableZones = availableZones.filter(z => z !== zone);
+        selectedZones.push(zone);
+        
+        renderLists();
+        updateCounts();
+        updateSelectedDisplay();
+    }
+
+    function moveLeft() {
+        const zone = getSelectedZone('selectedZones');
+        if (!zone) {
+            showMessage('Выберите зону для перемещения', 'error');
+            return;
+        }
+        
+        // Перемещаем из выбранных в доступные
+        selectedZones = selectedZones.filter(z => z !== zone);
+        availableZones.push(zone);
+        // Сортируем для удобства
+        availableZones.sort();
+        
+        renderLists();
+        updateCounts();
+        updateSelectedDisplay();
+    }
+
+    function renderLists() {
+        // Рендерим доступные зоны
+        const availContainer = document.getElementById('availableZones');
+        if (availableZones.length === 0) {
+            availContainer.innerHTML = `
+                <div class="empty-state">
+                    <p class="mb-1">Нет доступных зон</p>
+                </div>
+            `;
         } else {
-            display.innerHTML = selected.map(z => 
-                `<span class="badge bg-primary me-1">${z}</span>`
+            availContainer.innerHTML = availableZones.map(zone => 
+                `<div class="list-group-item" data-zone="${zone}" onclick="selectZone(this, 'available')">
+                    ${zone}
+                </div>`
+            ).join('');
+        }
+
+        // Рендерим выбранные зоны
+        const selectedContainer = document.getElementById('selectedZones');
+        if (selectedZones.length === 0) {
+            selectedContainer.innerHTML = `
+                <div class="empty-state">
+                    <p class="mb-1">Ничего не выбрано</p>
+                </div>
+            `;
+        } else {
+            selectedContainer.innerHTML = selectedZones.map(zone => 
+                `<div class="list-group-item" data-zone="${zone}" onclick="selectZone(this, 'selected')">
+                    ${zone}
+                </div>`
             ).join('');
         }
     }
 
-    function selectAllZones() {
-        document.querySelectorAll('.zone-checkbox').forEach(function(cb) {
-            cb.checked = true;
-        });
-        updateSelectedZones();
+    function updateCounts() {
+        document.getElementById('availableCount').textContent = availableZones.length;
+        document.getElementById('selectedCount').textContent = selectedZones.length;
     }
 
-    function deselectAllZones() {
-        document.querySelectorAll('.zone-checkbox').forEach(function(cb) {
-            cb.checked = false;
-        });
-        updateSelectedZones();
+    function updateSelectedDisplay() {
+        // Для обратной совместимости - обновляем скрытое поле если нужно
+        const display = document.getElementById('selectedZonesDisplay');
+        if (display) {
+            if (selectedZones.length === 0) {
+                display.innerHTML = '<span class="text-muted">Ничего не выбрано</span>';
+            } else {
+                display.innerHTML = selectedZones.map(z => 
+                    `<span class="badge bg-primary me-1">${z}</span>`
+                ).join('');
+            }
+        }
     }
 
     function showMessage(msg, type) {
@@ -209,15 +346,32 @@
         }, 5000);
     }
 
+    function cancelEdit() {
+        if (editingGroupName) {
+            editingGroupName = null;
+            document.getElementById('formTitle').textContent = 'Создать новую группу';
+            document.getElementById('groupName').value = '';
+            resetZones();
+            showMessage('Редактирование отменено', 'success');
+        }
+    }
+
+    function resetZones() {
+        // Сброс: все зоны в доступные
+        const allZones = [...availableZones, ...selectedZones];
+        availableZones = allZones.sort();
+        selectedZones = [];
+        renderLists();
+        updateCounts();
+        updateSelectedDisplay();
+    }
+
     async function createGroup() {
         const groupName = document.getElementById('groupName').value.trim();
         if (!groupName) {
             showMessage('Введите название группы', 'error');
             return;
         }
-
-        const checkboxes = document.querySelectorAll('.zone-checkbox:checked');
-        const selectedZones = Array.from(checkboxes).map(cb => cb.value);
 
         if (selectedZones.length === 0) {
             showMessage('Выберите хотя бы одну зону', 'error');
@@ -270,9 +424,8 @@
         }
     }
 
-async function editGroup(groupName) {
+    async function editGroup(groupName) {
         try {
-            // Получаем данные для редактирования
             const response = await fetch(`/admin/groups/edit/zones/${encodeURIComponent(groupName)}`);
             const data = await response.json();
             
@@ -281,29 +434,18 @@ async function editGroup(groupName) {
                 return;
             }
             
-            // Загружаем название группы
+            editingGroupName = groupName;
+            document.getElementById('formTitle').textContent = `Редактирование: ${groupName}`;
             document.getElementById('groupName').value = groupName;
             
-            // Обновляем список зон
-            const zoneList = document.querySelector('.zone-list');
-            zoneList.innerHTML = data.available_zones.map((zone, index) => `
-                <div class="form-check">
-                    <input class="form-check-input zone-checkbox" type="checkbox" value="${zone}" id="zone_${index}" 
-                           ${data.current_zones.includes(zone) ? 'checked' : ''}>
-                    <label class="form-check-label" for="zone_${index}">${zone}</label>
-                </div>
-            `).join('');
+            // Устанавливаем зоны
+            availableZones = data.available_zones.filter(z => !data.current_zones.includes(z));
+            selectedZones = [...data.current_zones];
             
-            // Обновляем счетчик
-            document.querySelector('.zone-count').textContent = `(доступно: ${data.all_zones.length})`;
+            renderLists();
+            updateCounts();
+            updateSelectedDisplay();
             
-            // Обновляем отображение выбранных зон
-            document.querySelectorAll('.zone-checkbox').forEach(cb => {
-                cb.addEventListener('change', updateSelectedZones);
-            });
-            updateSelectedZones();
-            
-            // Показываем сообщение
             showMessage(`Редактирование группы "${groupName}"`, 'success');
             document.querySelector('.card:first-child').scrollIntoView({ behavior: 'smooth' });
             
