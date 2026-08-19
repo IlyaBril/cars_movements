@@ -3,93 +3,8 @@
 <head>
     <title>Управление Отчетами</title>
     <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
-    <style>
-        .group-card {
-            border-left: 4px solid #0d6efd;
-            margin-bottom: 10px;
-        }
-        .group-card .card-header {
-            background-color: #f8f9fa;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .group-zones {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-        }
-        .group-zones .badge {
-            font-size: 0.75rem;
-        }
-        .zone-transfer-container {
-            display: flex;
-            gap: 15px;
-            align-items: stretch;
-            min-height: 300px;
-        }
-        .zone-panel {
-            flex: 1;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 10px;
-            background: #fff;
-        }
-        .zone-panel .panel-header {
-            font-weight: 600;
-            margin-bottom: 10px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #dee2e6;
-            display: flex;
-            justify-content: space-between;
-        }
-        .zone-list {
-            max-height: 350px;
-            overflow-y: auto;
-            padding: 0;
-            margin: 0;
-        }
-        .zone-list .list-group-item {
-            cursor: pointer;
-            padding: 6px 12px;
-            border: none;
-            border-bottom: 1px solid #f0f0f0;
-            font-size: 0.9rem;
-        }
-        .zone-list .list-group-item:hover {
-            background-color: #e7f3ff;
-        }
-        .zone-list .list-group-item.selected {
-            background-color: #cfe2ff;
-        }
-        .zone-controls {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            gap: 10px;
-            padding: 0 5px;
-        }
-        .zone-controls .btn {
-            width: 40px;
-            height: 40px;
-            padding: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-        }
-        .empty-state {
-            padding: 20px;
-            text-align: center;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            color: #6c757d;
-        }
-        .zone-count {
-            font-size: 0.85rem;
-            color: #6c757d;
-        }
-    </style>
+    <link href="{{ url_for('static', path='/css/admin_zones.css') }}" rel="stylesheet">
+
 </head>
 <body class="bg-light">
     <div class="container py-4">
@@ -214,6 +129,8 @@
 <script>
     // Данные групп из Python
     const groupsData = {{ groups_json|safe }};
+    // Сохраняем все доступные зоны из шаблона
+    const allZonesFromServer = {{ all_zones|tojson }};
     let editingGroupName = null;
     
     // Инициализация: копируем все зоны в доступные
@@ -221,13 +138,11 @@
     let selectedZones = [];
 
     document.addEventListener('DOMContentLoaded', function() {
-        // Собираем зоны из DOM
-        const availItems = document.querySelectorAll('#availableZones .list-group-item');
-        availItems.forEach(item => {
-            availableZones.push(item.dataset.zone);
-        });
+        // Инициализируем доступные зоны из данных сервера
+        availableZones = [...allZonesFromServer];
+        selectedZones = [];
         
-        // Инициализируем выбранные зоны (пустые)
+        renderLists();
         updateCounts();
         updateSelectedDisplay();
     });
@@ -281,6 +196,62 @@
         updateSelectedDisplay();
     }
 
+    function moveUp() {
+        const zone = getSelectedZone('selectedZones');
+        if (!zone) {
+            showMessage('Выберите зону для перемещения', 'error');
+            return;
+        }
+        
+        const index = selectedZones.indexOf(zone);
+        if (index <= 0) {
+            showMessage('Зона уже находится в начале списка', 'error');
+            return;
+        }
+        
+        // Меняем местами с предыдущим элементом
+        [selectedZones[index - 1], selectedZones[index]] = [selectedZones[index], selectedZones[index - 1]];
+        
+        renderLists();
+        // Сохраняем выделение на перемещенном элементе
+        setTimeout(() => {
+            const items = document.querySelectorAll('#selectedZones .list-group-item');
+            items.forEach(item => {
+                if (item.dataset.zone === zone) {
+                    item.classList.add('selected');
+                }
+            });
+        }, 50);
+    }
+
+    function moveDown() {
+        const zone = getSelectedZone('selectedZones');
+        if (!zone) {
+            showMessage('Выберите зону для перемещения', 'error');
+            return;
+        }
+        
+        const index = selectedZones.indexOf(zone);
+        if (index >= selectedZones.length - 1) {
+            showMessage('Зона уже находится в конце списка', 'error');
+            return;
+        }
+        
+        // Меняем местами со следующим элементом
+        [selectedZones[index], selectedZones[index + 1]] = [selectedZones[index + 1], selectedZones[index]];
+        
+        renderLists();
+        // Сохраняем выделение на перемещенном элементе
+        setTimeout(() => {
+            const items = document.querySelectorAll('#selectedZones .list-group-item');
+            items.forEach(item => {
+                if (item.dataset.zone === zone) {
+                    item.classList.add('selected');
+                }
+            });
+        }, 50);
+    }
+
     function renderLists() {
         // Рендерим доступные зоны
         const availContainer = document.getElementById('availableZones');
@@ -298,7 +269,7 @@
             ).join('');
         }
 
-        // Рендерим выбранные зоны
+        // Рендерим выбранные зоны с элементами управления порядком
         const selectedContainer = document.getElementById('selectedZones');
         if (selectedZones.length === 0) {
             selectedContainer.innerHTML = `
@@ -307,9 +278,19 @@
                 </div>
             `;
         } else {
-            selectedContainer.innerHTML = selectedZones.map(zone => 
+            selectedContainer.innerHTML = selectedZones.map((zone, index) => 
                 `<div class="list-group-item" data-zone="${zone}" onclick="selectZone(this, 'selected')">
-                    ${zone}
+                    <div class="selected-zone-item">
+                        <span class="zone-name">${index + 1}. ${zone}</span>
+                        <div class="zone-order-controls">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="event.stopPropagation(); moveUp()" title="Переместить вверх" ${index === 0 ? 'disabled' : ''}>
+                                ↑
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="event.stopPropagation(); moveDown()" title="Переместить вниз" ${index === selectedZones.length - 1 ? 'disabled' : ''}>
+                                ↓
+                            </button>
+                        </div>
+                    </div>
                 </div>`
             ).join('');
         }
@@ -358,8 +339,7 @@
 
     function resetZones() {
         // Сброс: все зоны в доступные
-        const allZones = [...availableZones, ...selectedZones];
-        availableZones = allZones.sort();
+        availableZones = [...allZonesFromServer];
         selectedZones = [];
         renderLists();
         updateCounts();
@@ -386,7 +366,7 @@
                 },
                 body: JSON.stringify({
                     group_name: groupName,
-                    zones: selectedZones
+                    zones: selectedZones  // Сохраняем порядок
                 })
             });
 
@@ -438,9 +418,12 @@
             document.getElementById('formTitle').textContent = `Редактирование: ${groupName}`;
             document.getElementById('groupName').value = groupName;
             
-            // Устанавливаем зоны
-            availableZones = data.available_zones.filter(z => !data.current_zones.includes(z));
-            selectedZones = [...data.current_zones];
+            // Используем все зоны из данных сервера
+            const currentZones = data.current_zones || [];
+            
+            // Устанавливаем доступные зоны (все зоны, кроме выбранных)
+            availableZones = allZonesFromServer.filter(z => !currentZones.includes(z));
+            selectedZones = [...currentZones]; // Сохраняем порядок
             
             renderLists();
             updateCounts();
@@ -450,6 +433,7 @@
             document.querySelector('.card:first-child').scrollIntoView({ behavior: 'smooth' });
             
         } catch (error) {
+            console.error('Error:', error);
             showMessage('Ошибка при загрузке данных', 'error');
         }
     }
