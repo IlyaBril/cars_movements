@@ -14,6 +14,7 @@ router = APIRouter(tags=["sankey"])
 templates = Jinja2Templates(directory="templates")
 
 
+
 ZONE_POSITIONS = {
     # Основные зоны
     'M440. GRT': {'x': 0.05, 'y': 0.5, 'color': '#FF6B6B'},
@@ -36,12 +37,21 @@ def default_date():
 
 @router.get("/sankey")
 async def sankey_page(request: Request):
-    return templates.TemplateResponse(request=request, name="sankey.html", context={"default_date": default_date()})
+    data_service = DataService()
+    with data_service:
+        zone_types = data_service.get_zones_types()
+        
+    return templates.TemplateResponse(
+        request=request,
+        name="sankey.html",
+        context={
+            "default_date": default_date(),
+            "zone_types": zone_types,
+            })
 
 
 @router.get("/sankey-chart")
 async def get_sankey_chart(date: str = Query(default=default_date()), zone_type: str = Query(default="main")):
-    logger.info(f'{__name__} get sankey chart')
     try:
         data_service = DataService()
         with data_service:

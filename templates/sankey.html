@@ -9,9 +9,19 @@
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
-        body { background-color: #f8f9fa; }
-        .navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .card { border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        body { 
+            background-color: #f8f9fa; 
+        }
+        
+        .navbar { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+        }
+        
+        .card { 
+            border-radius: 15px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); 
+        }
+        
         .chart-container { 
             background: white; 
             border-radius: 15px; 
@@ -20,58 +30,120 @@
             width: 100%;
             visibility: hidden;
         }
-        .loading-spinner { display: none; text-align: center; padding: 50px; }
+        
+        .loading-spinner { 
+            display: none; 
+            text-align: center; 
+            padding: 50px; 
+        }
+        
         #chartContent {
             width: 100%;
             height: auto;
         }
+        
         #chartContent .plotly-graph-div {
             width: 100% !important;
             height: auto !important;
         }
+        
         .js-plotly-plot {
             width: 100% !important;
             height: auto !important;
         }
+
+        /* Дополнительные стили для единообразия с первым кодом */
+        .form-label {
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .btn-sm {
+            font-size: 0.875rem;
+        }
+
+        .form-control-sm, .form-select-sm {
+            font-size: 0.875rem;
+        }
+
+        .small {
+            font-size: 0.875rem;
+        }
+
+        .gap-2 {
+            gap: 0.5rem;
+        }
+
+        .form-switch .form-check-input {
+            width: 2em;
+            margin-left: -2.5em;
+        }
+
+        .form-switch .form-check-label {
+            padding-left: 0.5rem;
+        }
     </style>
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark">
-        <div class="container">
-            <a class="navbar-brand" href="/">📊 Система анализа потоков</a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="/">Главная</a>
-                <a class="nav-link active" href="/sankey">Sankey</a>
-            </div>
-        </div>
-    </nav>
-
-    <div class="container mt-4">
-        <div class="row">
+<body class="bg-light">
+    <div class="container-fluid py-2">
+        <!-- Верхняя панель с заголовком и выбором даты -->
+        <div class="row mb-2">
             <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">📊 Sankey Диаграмма потоков</h5>
-                        <p class="card-text text-muted">Визуализация перемещений между зонами за выбранный день</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <h1 id="topMessage" class="h5 mb-0">Диаграмма потоков {{ default_date }}</h1>
+
+                    <div class="dropdown me-2">
+                        <button class="btn btn-outline-primary btn-sm dropdown-toggle" 
+                                type="button" 
+                                data-bs-toggle="dropdown">
+                            <span id="selectedZone">{{ zone_types[0] if zone_types else 'Выберите зону' }}</span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            {% for zone_type in zone_types %}
+                            <li>
+                                <button class="dropdown-item" 
+                                        type="button" 
+                                        onclick="switchZoneType('{{ zone_type }}'); 
+                                                 document.getElementById('selectedZone').textContent = '{{ zone_type }}'">
+                                    {{ zone_type }}
+                                </button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <label for="analysisDate" class="form-label mb-0 small">Выбор даты:</label>
+                        <input type="date" id="analysisDate" value="{{ default_date }}" class="form-control form-control-sm">
                         
-                        <form id="sankeyForm" class="row g-3 mt-3">
-                            <div class="col-md-4">
-                                <label for="date" class="form-label">Дата</label>
-                                <input type="date" class="form-control" id="date" value="{{ default_date }}" required>
-                            </div>
-                            <div class="col-md-4">
-                                <label for="zoneType" class="form-label">Тип зон</label>
-                                <select class="form-select" id="zoneType">
-                                    <option value="main">Основные зоны</option>
-                                    <option value="rep">Зоны ретуши</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4 d-flex align-items-end">
-                                <button type="submit" class="btn btn-primary w-100">Построить диаграмму</button>
-                            </div>
-                        </form>
+                        <!-- Автообновление -->
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input" type="checkbox" id="autoRefreshSwitch" checked>
+                            <label class="form-check-label small" for="autoRefreshSwitch">Авто</label>
+                        </div>
+                        
+                        <select id="refreshInterval" class="form-select form-select-sm" style="width: auto;">
+                            <option value="60">1 мин</option>
+                            <option value="300" selected>5 мин</option>
+                            <option value="600">10 мин</option>
+                            <option value="1800">30 мин</option>
+                            <option value="3600">1 час</option>
+                        </select>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Сообщение об ошибках/успехе -->
+        <div id="uploadMessage" class="mb-2"></div>
+
+        <!-- Индикатор загрузки -->
+        <div id="loadingIndicator" class="alert alert-info d-none mb-2" role="alert">
+            <div class="d-flex align-items-center">
+                <div class="spinner-border spinner-border-sm me-2" role="status">
+                    <span class="visually-hidden">Загрузка...</span>
+                </div>
+                Загружаем данные...
             </div>
         </div>
 
@@ -88,19 +160,123 @@
     </div>
 
     <script>
-        $(document).ready(function() {
-            loadSankeyData();
-            $('#sankeyForm').on('submit', function(e) {
-                e.preventDefault();
-                loadSankeyData();
+        // Переменные состояния
+        let currentZoneType = '{{ zone_types[0] if zone_types else "main" }}';
+        let refreshTimer = null;
+        let isAutoRefreshEnabled = true;
+
+        // Функция переключения типа зоны
+        function switchZoneType(type) {
+            currentZoneType = type;
+            loadSankeyData(true);
+        }
+
+        // --- Функции автообновления ---
+
+        function toggleAutoRefresh() {
+            const switchElement = document.getElementById('autoRefreshSwitch');
+            isAutoRefreshEnabled = switchElement.checked;
+            
+            if (isAutoRefreshEnabled) {
+                startAutoRefresh();
+                showMessage('Автообновление включено', 'success');
+            } else {
+                stopAutoRefresh();
+                showMessage('Автообновление выключено', 'info');
+            }
+        }
+
+        function startAutoRefresh() {
+            stopAutoRefresh(); // Останавливаем старый таймер
+            
+            const intervalSelect = document.getElementById('refreshInterval');
+            const intervalMs = parseInt(intervalSelect.value) * 1000;
+            
+            refreshTimer = setInterval(() => {
+                if (isAutoRefreshEnabled) {
+                    loadSankeyData(false);
+                }
+            }, intervalMs);
+            
+            // Показываем статус
+            const minutes = intervalMs / 60000;
+            console.log(`Автообновление запущено (каждые ${minutes} мин)`);
+        }
+
+        function stopAutoRefresh() {
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+                refreshTimer = null;
+                console.log('Автообновление остановлено');
+            }
+        }
+
+        function onRefreshIntervalChange() {
+            if (isAutoRefreshEnabled) {
+                startAutoRefresh();
+                const intervalSelect = document.getElementById('refreshInterval');
+                const minutes = parseInt(intervalSelect.value) / 60;
+                showMessage(`Интервал обновления изменен на ${minutes} мин`, 'info');
+            }
+        }
+
+        // --- Вспомогательные функции ---
+
+        // Обновление заголовка
+        function updateTitle(dateString) {
+            const formattedDate = dateString ? formatDate(dateString) : '{{ default_date }}';
+            document.getElementById('topMessage').textContent = 
+                `Диаграмма потоков ${currentZoneType} ${formattedDate}`;
+        }
+
+        // Форматирование даты
+        function formatDate(dateString) {
+            if (!dateString) return '{{ default_date }}';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('ru-RU', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
             });
-        });
+        }
 
-        function loadSankeyData() {
-            const date = $('#date').val();
-            const zoneType = $('#zoneType').val();
+        // Отображение сообщений
+        function showMessage(msg, type) {
+            const div = document.getElementById('uploadMessage');
+            const alertClass = type === 'error' ? 'alert-danger' : 
+                              type === 'info' ? 'alert-info' : 'alert-success';
+            div.innerHTML = `
+                <div class="alert ${alertClass} alert-dismissible fade show small" role="alert">
+                    ${msg}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            setTimeout(() => { div.innerHTML = ''; }, 5000);
+        }
 
-            $('#loadingSpinner').show();
+        // Показ/скрытие индикатора загрузки
+        function showLoading() {
+            document.getElementById('loadingIndicator').classList.remove('d-none');
+            document.getElementById('loadingSpinner').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingIndicator').classList.add('d-none');
+            document.getElementById('loadingSpinner').style.display = 'none';
+        }
+
+        // Основная функция загрузки данных
+        function loadSankeyData(showIndicator = true) {
+            const date = document.getElementById('analysisDate').value;
+            const zoneType = currentZoneType;
+
+            // Обновляем заголовок
+            updateTitle(date);
+
+            if (showIndicator) {
+                showLoading();
+            }
+
             $('#chartContainer').css('visibility', 'hidden');
 
             $.ajax({
@@ -108,6 +284,10 @@
                 method: 'GET',
                 success: function(data) {
                     $('#chartContent').html(data);
+                    
+                    if (showIndicator) {
+                        hideLoading();
+                    }
                     
                     requestAnimationFrame(function() {
                         setTimeout(function() {
@@ -123,26 +303,63 @@
                                 
                                 requestAnimationFrame(function() {
                                     $('#chartContainer').css('visibility', 'visible');
-                                    $('#loadingSpinner').hide();
                                 });
                             } else {
                                 $('#chartContainer').css('visibility', 'visible');
-                                $('#loadingSpinner').hide();
                             }
                         }, 50);
                     });
                 },
                 error: function(xhr) {
-                    $('#loadingSpinner').hide();
+                    if (showIndicator) {
+                        hideLoading();
+                    }
                     $('#chartContent').html(`
                         <div class="alert alert-danger">
                             Ошибка загрузки диаграммы: ${xhr.responseText || 'Неизвестная ошибка'}
                         </div>
                     `);
                     $('#chartContainer').css('visibility', 'visible');
+                    showMessage('Ошибка загрузки диаграммы', 'error');
                 }
             });
         }
+
+        // --- Инициализация ---
+
+        $(document).ready(function() {
+            // Устанавливаем начальное значение зоны
+            const zoneTypes = {{ zone_types|tojson }};
+            if (zoneTypes && zoneTypes.length > 0) {
+                currentZoneType = zoneTypes[0];
+                document.getElementById('selectedZone').textContent = zoneTypes[0];
+            }
+
+            // Настройка обработчиков автообновления
+            document.getElementById('autoRefreshSwitch').addEventListener('change', toggleAutoRefresh);
+            document.getElementById('refreshInterval').addEventListener('change', onRefreshIntervalChange);
+            
+            // Автообновление при изменении даты
+            document.getElementById('analysisDate').addEventListener('change', function() {
+                loadSankeyData(true);
+            });
+
+            // Загрузка данных
+            loadSankeyData(true);
+            
+            // Запуск автообновления (по умолчанию включено)
+            if (document.getElementById('autoRefreshSwitch').checked) {
+                startAutoRefresh();
+            }
+        });
+
+        // Очистка таймера при закрытии страницы
+        window.addEventListener('beforeunload', function() {
+            stopAutoRefresh();
+        });
     </script>
+
+    <!-- Bootstrap JS в конце -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
