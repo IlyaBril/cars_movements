@@ -225,7 +225,7 @@
         }
 
         try {
-            const response = await fetch('/admin/groups/create', {
+            const response = await fetch('/admin/groups/zones/create', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -253,7 +253,7 @@
         if (!confirm(`Удалить группу "${groupName}"?`)) return;
 
         try {
-            const response = await fetch(`/admin/groups/${encodeURIComponent(groupName)}`, {
+            const response = await fetch(`/admin/groups/zones/${encodeURIComponent(groupName)}`, {
                 method: 'DELETE'
             });
 
@@ -273,7 +273,7 @@
 async function editGroup(groupName) {
         try {
             // Получаем данные для редактирования
-            const response = await fetch(`/admin/groups/edit/${encodeURIComponent(groupName)}`);
+            const response = await fetch(`/admin/groups/edit/zones/${encodeURIComponent(groupName)}`);
             const data = await response.json();
             
             if (!response.ok) {

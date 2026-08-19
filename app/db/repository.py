@@ -23,6 +23,65 @@ class MovementRepository:
     def __init__(self, session: Session = None):
         self.session = session
 
+
+    #Отчеты
+    def get_zones_types_repo(self):
+        """Получение списка названий отчетов"""
+        zone_types = self.session.scalars(select(ZonesList.name)).all()
+        logger.info(f'{__name__} zone_types {zone_types}')
+        return zone_types
+
+    def get_dash_zones_repo(self) -> list[ZonesList]:
+        """Получение всех объектов отчетов"""
+        return self.session.query(ZonesList).all()
+       
+    def get_all_zones_from_db(self)-> list[tuple[str]]: 
+        """Получение всех существующих зон в базе movement"""
+        all_zones = self.session.query(
+            distinct(Movement.Точка_регистрации)
+            ).order_by(
+                Movement.Точка_регистрации
+            ).all()
+        return all_zones
+
+    def save_dash_group_to_db(self, group_name: str, zones: List[str]) -> bool:
+        """Сохранение группы отчета"""
+        logger.info(f'{__name__} group_name {group_name} ')
+        try:
+            group = self.session.query(ZonesList).filter_by(name=group_name).first()
+            logger.info(f'{__name__} grpu {group} group_name {group_name} zones {zones}')
+            if group:
+                group.zones = json.dumps(zones, ensure_ascii=False)
+            else:
+                logger.info(f'{__name__} grpu else')
+                group = ZonesList(
+                    name=group_name,
+                    zones=json.dumps(zones, ensure_ascii=False)
+                )
+                self.session.add(group)
+            self.session.commit()
+            return True
+        except Exception as e:
+            self.session.rollback()
+            print(f"Ошибка сохранения группы: {e}")
+            return False
+    
+    def delete_dash_group_from_db(self, group_name: str) -> bool:
+        """Удаление группы"""
+        try:
+            group = self.session.query(ZonesList).filter_by(name=group_name).first()
+            if group:
+                self.session.delete(group)
+                self.session.commit()
+            return True
+        except Exception as e:
+            self.session.rollback()
+            print(f"Ошибка удаления группы: {e}")
+            return False
+
+
+    #Data service
+
     def get_data_from_db (self, date=None):
         """Получение всей таблицы из движений"""
         try:
@@ -50,28 +109,7 @@ class MovementRepository:
                 return self.session.query(Movement).all()
             
         except SQLAlchemyError as e:
-            #Нужно добавить логирование ошибки
             raise SQLAlchemyError(f"Ошибка при получении данных из таблицы Movement: {e}")
-    
-    def get_zones_types_repo(self):
-        zone_types = self.session.scalars(select(ZonesList.name)).all()
-        logger.info(f'{__name__} zone_types {zone_types}')
-        return zone_types
-
-    def get_dash_zones_repo(self) -> list[ZonesList]:
-        """Ф-ия возвращает сгруппированные зоны"""
-        return self.session.query(ZonesList).all()
-
-       
-    def get_all_zones_from_db(self)-> list[tuple[str]]: 
-        """Получение всех зон из движений"""
-        all_zones = self.session.query(
-            distinct(Movement.Точка_регистрации)
-            ).order_by(
-                Movement.Точка_регистрации
-            ).all()
-        
-        return all_zones
 		
     def get_zones_from_db(self, zones_list_name: str):
         zones_list = self.session.query(ZonesList).filter_by(name=zones_list_name).first()
@@ -110,7 +148,7 @@ class MovementRepository:
         except SQLAlchemyError as e:
             return False, f"Ошибка: {str(e)}", 0
 
-        
+#Upload     
     def load_excel_to_db(self, excel_path: str = "Движение.xlsx") -> bool:
         """Загрузка данных из Excel в PostgreSQL"""
         try:
@@ -237,3 +275,4 @@ class GroupRepository:
             self.session.rollback()
             print(f"Ошибка удаления группы: {e}")
             return False
+

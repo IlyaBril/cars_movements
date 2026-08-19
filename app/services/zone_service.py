@@ -21,34 +21,47 @@ class ZoneService:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._sqlite_sesion.close()
         self._psql_session.close()
-    
-    def update_zones(self, zones: List[str], zones_rep: List[str]) -> None:
-        """Обновить зоны в БД"""
-        self._group_repo.save_zones_to_db(zones, zones_rep)
 
+    #Отчеты
     def get_dash_zones(self) -> Dict[str, List[str]]:
+        """Словарь отчетов (groups) со списком (zones) для каждого отчета """
         query = self._movement_repo.get_dash_zones_repo()
-        zones = {}
+        groups = {}
         for zone in query:
-            zones[zone.name] = json.loads(zone.zones)
-        logger.info(f'{__name__} dash zones {zones}')
-        return zones
+            groups [zone.name] = json.loads(zone.zones)
+        logger.info(f'{__name__} dash zones {groups}')
+        return groups
+
+    def get_all_zones(self)-> list:
+        """Получение всех существующих зон в базе movement"""
+        all_zones = self._movement_repo.get_all_zones_from_db()
+        return [zone[0] for zone in all_zones]
+
+    def save_dash_group(self, group_name: str, zones: List[str]) -> bool:
+        result = self._movement_repo.save_dash_group_to_db(
+            group_name, zones
+            )
+        return result
+
+    def delete_dash_group(self, group_name: str) -> bool:
+        return self._movement_repo.delete_dash_group_from_db(group_name)
+
     
+    
+    #Группировка зон
+
     def get_groups(self,
         zone_names: Optional[List[str]] = None,
         ) -> Dict[str, List[str]]:
-        """Получить группы из БД"""
+        """Группировка зон.
+           Словарь групп со списком зон.
+        """
         query = self._group_repo.load_groups_from_db(zone_names)
         groups = {}
         for group in query:
             groups[group.group_name] = json.loads(group.zones)
         return groups
-		
-    def get_all_zones(self)-> list:
-        """Получить все зоны из БД movement"""
-        all_zones = self._movement_repo.get_all_zones_from_db()
-        return [zone[0] for zone in all_zones]
-
+    
     def get_available_zones(self, editing_group: str = None) -> list:
         """Получение зон, которые еще не входят ни в одну группу"""
         all_zones = self.get_all_zones()
@@ -77,6 +90,9 @@ class ZoneService:
             )
         return result
 
+    def delete_group(self, group_name: str) -> bool:
+        return self._group_repo.delete_group_from_db(group_name)
+
 # УДАЛИТЬ
 
     def get_zones(self) -> Tuple[List[str], List[str]]:
@@ -84,3 +100,8 @@ class ZoneService:
         zones, zones_rep = self._group_repo.load_zones_from_db()
         print('Zone Srvice zones, zones_rep ', zones, zones_rep)
         return zones, zones_rep
+
+
+    def update_zones(self, zones: List[str], zones_rep: List[str]) -> None:
+        """Обновить зоны в БД"""
+        self._group_repo.save_zones_to_db(zones, zones_rep)
