@@ -130,6 +130,59 @@
                             <option value="3600">1 час</option>
                         </select>
                     </div>
+                    
+                  
+                    <!--   Загрузка GIF   -->
+                    <div class="dropdown ms-2">
+    <button class="btn btn-success btn-sm dropdown-toggle" 
+            type="button" 
+            data-bs-toggle="dropdown">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="me-1">
+            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+        </svg>
+        GIF отчет
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px;">
+        <li>
+            <div class="mb-2">
+                <label class="form-label small fw-bold">Интервал между кадрами</label>
+                <select id="gifInterval" class="form-select form-select-sm">
+                    <option value="15">15 мин</option>
+                    <option value="30" selected>30 мин</option>
+                    <option value="60">1 час</option>
+                    <option value="120">2 часа</option>
+                </select>
+            </div>
+        </li>
+        <li>
+            <div class="mb-2">
+                <label class="form-label small fw-bold">Длительность кадра</label>
+                <select id="gifDuration" class="form-select form-select-sm">
+                    <option value="0.5">0.5 сек</option>
+                    <option value="0.8">0.8 сек</option>
+                    <option value="1.0" selected>1.0 сек</option>
+                    <option value="1.5">1.5 сек</option>
+                    <option value="2.0">2.0 сек</option>
+                </select>
+            </div>
+        </li>
+        <li>
+            <button class="btn btn-success btn-sm w-100" onclick="downloadGif()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="me-1">
+                    <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                    <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+                </svg>
+                Скачать GIF
+            </button>
+        </li>
+        <li class="mt-2">
+            <small class="text-muted" id="gifInfo">Ожидание данных...</small>
+        </li>
+    </ul>
+</div>
+
+
                 </div>
             </div>
         </div>
@@ -357,6 +410,86 @@
         window.addEventListener('beforeunload', function() {
             stopAutoRefresh();
         });
+
+
+    // Функция скачивания GIF с информацией о прогрессе
+async function downloadGif() {
+    const date = document.getElementById('analysisDate').value;
+    const zoneType = currentZoneType;
+    const interval = document.getElementById('gifInterval').value;
+    const duration = document.getElementById('gifDuration').value;
+    
+    const btn = document.querySelector('.btn-success.dropdown-toggle');
+    const originalText = btn.innerHTML;
+    
+    // Показываем прогресс
+    btn.innerHTML = `
+        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+        Генерация...
+    `;
+    btn.disabled = true;
+    
+    try {
+        showMessage('Генерация GIF-отчета... Это может занять 10-30 секунд', 'info');
+        
+        // Проверяем доступность данных
+        const infoResponse = await fetch(`/sankey-gif-info?date=${date}&zone_type=${zoneType}`);
+        const infoData = await infoResponse.json();
+        
+        if (infoData.valid_snapshots > 0) {
+            document.getElementById('gifInfo').textContent = 
+                `Найдено ${infoData.valid_snapshots} снимков с данными`;
+        }
+        
+        // Скачиваем GIF
+        const url = `/sankey-gif?date=${date}&zone_type=${zoneType}&interval_minutes=${interval}&duration=${duration}&max_frames=24`;
+        
+        // Открываем в новой вкладке для скачивания
+        window.open(url, '_blank');
+        
+        showMessage('Генерация GIF началась. Файл будет скачан автоматически', 'success');
+        
+    } catch (error) {
+        showMessage('Ошибка: ' + error.message, 'error');
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+
+// Функция для обновления информации о GIF при смене даты
+async function updateGifInfo() {
+    const date = document.getElementById('analysisDate').value;
+    const zoneType = currentZoneType;
+    
+    try {
+        const response = await fetch(`/sankey-gif-info?date=${date}&zone_type=${zoneType}`);
+        const data = await response.json();
+        
+        if (data.valid_snapshots > 0) {
+            document.getElementById('gifInfo').textContent = 
+                `${data.valid_snapshots} снимков с данными (${data.zones_count} зон)`;
+        } else {
+            document.getElementById('gifInfo').textContent = 
+                'Нет данных для выбранной даты';
+        }
+    } catch (error) {
+        document.getElementById('gifInfo').textContent = 'Ошибка получения информации';
+    }
+}
+
+// Вызываем при загрузке страницы и смене даты
+$(document).ready(function() {
+    // ... существующий код ...
+    
+    // Добавляем обновление информации о GIF
+    updateGifInfo();
+    document.getElementById('analysisDate').addEventListener('change', updateGifInfo);
+    document.querySelector('.dropdown-menu').addEventListener('show.bs.dropdown', updateGifInfo);
+});
+
+
     </script>
 
     <!-- Bootstrap JS в конце -->
