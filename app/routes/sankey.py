@@ -13,23 +13,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["sankey"])
 templates = Jinja2Templates(directory="templates")
 
-
+ENABLE_CALIBRATION = True  # Глобальная переменная в начале файла
 
 ZONE_POSITIONS = {
     # Основные зоны
-    'M440. GRT': {'x': 0.05, 'y': 0.5, 'color': '#FF6B6B'},
-    'М444_М446 Валидация': {'x': 0.3, 'y': 0.2, 'color': '#45B7D1'},
+    'M440. GRT': {'x': 0.01, 'y': 0.5, 'color': '#FF6B6B'},
+    'М444_М446 Валидация': {'x': 0.2, 'y': 0.5, 'color': '#45B7D1'},
     'M450. Контроль электрики': {'x': 0.6, 'y': 0.2, 'color': '#DDA0DD'},
     'M470. Передача на СГП (BLAN)': {'x': 0.8, 'y': 0.2, 'color': '#DDA0DD'}, 
-    'ТиД': {'x': 0.2, 'y': 0.6, 'color': '#4ECDC4'},
-    'M471. Отказ по качеству': {'x': 0.4, 'y': 0.6, 'color': '#96CEB4'},
-    'M445. Зона выборочного контроля': {'x': 0.55, 'y': 0.5, 'color': '#FFEAA7'},
+    'ТиД': {'x': 0.8, 'y': 0.7, 'color': '#4ECDC4'},
+    'M471. Отказ по качеству': {'x': 0.6, 'y': 0.6, 'color': '#96CEB4'},
+    'M445. Зона выборочного контроля': {'x': 0.45, 'y': 0.6, 'color': '#FFEAA7'},
     'M422. Некомплекты': {'x': 0.95, 'y': 0.7, 'color': '#FFEAA7'},
     'M500. Приемка на СГП (MADU)': {'x': 0.95, 'y': 0.3, 'color': '#FFEAA7'},
-    'M483. Чистые автомобили': {'x': 0.95, 'y': 0.4, 'color': '#FFEAA7'},
+    'M483. Чистые автомобили': {'x': 0.95, 'y': 0.5, 'color': '#FFEAA7'},
+    'calibration': {'x': -0.1, 'y': 0.5, 'color': 'rgba(0,0,0,0)'},
+    
 }
 
-ADDITINAL_ZONES = ['M422. Некомплекты', 'M500. Приемка на СГП (MADU)', 'M483. Чистые автомобили']
 
 def default_date():
     return datetime.today().strftime("%Y-%m-%d")
@@ -85,8 +86,7 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
     """
 
     """
-    allowed_zones = allowed_zones + ADDITINAL_ZONES
-    logger.info(f'{__name__} allowed extended {allowed_zones}')
+    
 	
     # Фильтрация по дате отчета
     target_date = pd.Timestamp(date).date()	
@@ -173,6 +173,103 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
     return {'nodes': nodes, 'links': links, 'message': None}
 
 
+
+# ============ ФУНКЦИЯ ДЛЯ ОПРЕДЕЛЕНИЯ ЦВЕТОВ СВЯЗЕЙ ============
+def get_link_colors(sources: list, node_colors: list, opacity: float = 0.4) -> list:
+    """
+    Определяет цвета для связей на основе цвета узлов-источников
+    
+    Args:
+        sources: список индексов узлов-источников для каждой связи
+        node_colors: список цветов всех узлов
+        opacity: прозрачность (0.0 - 1.0), по умолчанию 0.4
+    
+    Returns:
+        list: список цветов для каждой связи
+    """
+    link_colors = []
+    
+    for src_idx in sources:
+        # Проверяем, что индекс существует в списке цветов узлов
+        if src_idx < len(node_colors):
+            node_color = node_colors[src_idx]
+            
+            # Если цвет в формате rgba, меняем прозрачность
+            if isinstance(node_color, str) and node_color.startswith('rgba'):
+                # Разбиваем строку rgba(r,g,b,a) и заменяем alpha
+                parts = node_color.replace('rgba(', '').replace(')', '').split(',')
+                if len(parts) == 4:
+                    r, g, b, _ = parts
+                    link_colors.append(f'rgba({r.strip()}, {g.strip()}, {b.strip()}, {opacity})')
+                else:
+                    link_colors.append(node_color)
+            # Если цвет в формате HEX, используем его как есть
+            elif isinstance(node_color, str) and node_color.startswith('#'):
+                link_colors.append(node_color)
+            else:
+                # Для других форматов - стандартный синий
+                link_colors.append(f'rgba(100, 100, 255, {opacity})')
+        else:
+            # Если индекс не найден - стандартный синий
+            link_colors.append(f'rgba(100, 100, 255, {opacity})')
+    
+    return link_colors
+# ================================================================
+
+
+
+# ============ НОВАЯ ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ КАЛИБРОВКИ ============
+def add_calibration_node(sankey_data: dict, calibration_value: int = 400) -> dict:
+    """
+    Добавляет калибровочный узел и связь для фиксации масштаба диаграммы
+    
+    Args:
+        sankey_data: словарь с данными {'nodes': [...], 'links': [...]}
+        calibration_value: фиксированное значение для калибровки (по умолчанию 300)
+    
+    Returns:
+        dict: обновленный словарь с добавленным калибровочным узлом и связью
+    """
+    if not sankey_data['nodes'] or not sankey_data['links']:
+        return sankey_data
+
+    logger.info(f'{__name__} sankey data {sankey_data}')
+    
+    # Создаем копию данных
+    result = {
+        'nodes': sankey_data['nodes'].copy(),
+        'links': sankey_data['links'].copy(),
+        'message': sankey_data.get('message')
+    }
+    
+    # Добавляем калибровочный узел как СТРОКУ (не словарь!)
+    result['nodes'].insert(0, "calibration")
+    
+    
+    # Обновляем индексы в связях (+1)
+    updated_links = []
+    for link in result['links']:
+        updated_links.append({
+            'source': link['source'] + 1,
+            'target': link['target'] + 1,
+            'value': link['value']
+        })
+    result['links'] = updated_links
+    
+    # Добавляем калибровочную связь
+    if len(result['nodes']) > 1:
+        calibration_link = {
+            'source': 0,
+            'target': 1,
+            'value': calibration_value,
+        }
+        result['links'].append(calibration_link)
+    logger.info(f'{__name__} result  {result}')
+    
+    return result
+# ================================================================
+
+
 def create_sankey_chart(
     df: pd.DataFrame,
     date: str,
@@ -181,10 +278,18 @@ def create_sankey_chart(
     ) -> go.Figure:
 
     sankey_data = prepare_sankey_data(df, date, allowed_zones)
+
+
+# ============ ВЫЗОВ ФУНКЦИИ КАЛИБРОВКИ ============
+# Для ОТКЛЮЧЕНИЯ калибровки просто закомментируйте следующую строку
+# или замените на: sankey_data = sankey_data
+    if ENABLE_CALIBRATION:
+        sankey_data = add_calibration_node(sankey_data, calibration_value=500)
+# ===================================================
+    
     
     if not sankey_data['nodes'] or not sankey_data['links']:
         fig = go.Figure()
-
         fig.update_layout(
             title={
                 'text': f'Нет данных для отображения за {date}',
@@ -193,7 +298,6 @@ def create_sankey_chart(
                 },
             height=400
             )
-
         return fig
 
     node_labels = sankey_data['nodes']
@@ -203,6 +307,8 @@ def create_sankey_chart(
         sources.append(link['source'])
         targets.append(link['target'])
         values.append(link['value'])
+
+    
 
     colors = [f'rgba({random.randint(100,200)}, {random.randint(100,200)}, {random.randint(100,200)}, 0.8)' for _ in node_labels]
 
@@ -229,10 +335,17 @@ def create_sankey_chart(
             node_positions.append([random.uniform(0.1, 0.9), random.uniform(0.1, 0.9)])
             node_colors.append(f'rgba({random.randint(100,200)}, {random.randint(100,200)}, {random.randint(100,200)}, 0.8)')
 
+
+# ============ ПОЛУЧАЕМ ЦВЕТА ДЛЯ СВЯЗЕЙ ============
+    link_colors = get_link_colors(sources, node_colors, opacity=0.4)
+# ====================================================
+
+
+
     fig = go.Figure(data=[go.Sankey(
         node=dict(
             pad=15,
-            thickness=20,
+            thickness=10,
             line=dict(color="black", width=0.5),
             label=node_labels,
             color=node_colors,
@@ -243,13 +356,12 @@ def create_sankey_chart(
             source=sources,
             target=targets,
             value=values,
-            color='rgba(100, 100, 255, 0.2)'
+            color=link_colors,
             )
     )])
+    
 
     fig.update_layout(
-        title={'text': f'Sankey диаграмма потоков за {date} {"(Зоны ретуши)" if zone_type == "rep" else "(Основные зоны)"}', 
-               'y': 0.95, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'},
-        autosize=True, width=None, height=700, margin=dict(l=20, r=20, t=60, b=20)
+        autosize=True, width=None, height=400, margin=dict(l=20, r=20, t=60, b=20)
     )
     return fig

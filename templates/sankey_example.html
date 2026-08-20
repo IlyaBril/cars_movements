@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sankey с циклическими связями (ApexCharts)</title>
+  <!-- Подключаем ApexCharts через CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #chart { width: 100%; height: 500px; }
+  </style>
+</head>
+<body>
+  <h1>Sankey: потоки и обратные связи (циклы)</h1>
+  <div id="chart"></div>
+
+  <script>
+    // --- ВСЕ ДАННЫЕ ПРЯМО ВО ФРОНТЕ ---
+    const nodes = [
+      { id: 'A', label: 'Склад A' },
+      { id: 'B', label: 'Цех B' },
+      { id: 'C', label: 'Склад C' },
+      { id: 'D', label: 'Отгрузка D' },
+      { id: 'E', label: 'Возврат E' } // узел возврата, который замыкает цикл
+    ];
+
+    const links = [
+      // Прямые потоки
+      { from: 'A', to: 'B', value: 120 },
+      { from: 'B', to: 'C', value: 90 },
+      { from: 'C', to: 'D', value: 70 },
+
+      // Циклическая/обратная связь: из отгрузки обратно на склад (или в зону возврата)
+      { from: 'D', to: 'E', value: 20 },
+      { from: 'E', to: 'A', value: 20 } // замыкание: возврат на склад A
+    ];
+
+    // Формируем данные для ApexCharts
+    const seriesData = [{
+      data: links.map(l => ({
+        from: l.from,
+        to: l.to,
+        value: l.value
+      }))
+    }];
+
+    const options = {
+      series: seriesData,
+      chart: {
+        type: 'sankey',
+        height: 500,
+        toolbar: { show: true }
+      },
+      plotOptions: {
+        sankey: {
+          isDistributed: false,
+          curve: 'straight', // можно поставить 'curved' для более плавных линий
+          width: 12,
+          fill: {
+            type: ['gradient'],
+            gradient: {
+              shade: 'light',
+              type: 'horizontal',
+              inverseColors: false,
+              opacityFrom: 0.85,
+              opacityTo: 0.6,
+              stops: [0, 50, 100]
+            }
+          }
+        }
+      },
+      dataLabels: { enabled: false },
+      tooltip: {
+        enabled: true,
+        followPointer: true
+      },
+      stroke: {
+        width: 0,
+        colors: ['#000']
+      },
+      legend: { show: false }
+    };
+
+    // Инициализация графика
+    const chart = new ApexCharts(document.querySelector('#chart'), options);
+    chart.render();
+  </script>
+</body>
+</html>
