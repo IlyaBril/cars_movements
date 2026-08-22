@@ -52,7 +52,6 @@
             height: auto !important;
         }
 
-        /* Дополнительные стили для единообразия с первым кодом */
         .form-label {
             font-size: 0.875rem;
             margin-bottom: 0.25rem;
@@ -81,6 +80,165 @@
 
         .form-switch .form-check-label {
             padding-left: 0.5rem;
+        }
+
+        /* Стили для отображения координат */
+        #coordinatesDisplay {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            z-index: 9999;
+            min-width: 220px;
+            max-width: 350px;
+            max-height: 350px;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            display: none;
+            pointer-events: auto;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        #coordinatesDisplay::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        #coordinatesDisplay::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.05);
+        }
+
+        #coordinatesDisplay::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.3);
+            border-radius: 2px;
+        }
+
+        #coordinatesDisplay .coord-title {
+            font-weight: bold;
+            color: #4fc3f7;
+            margin-bottom: 6px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #coordinatesDisplay .coord-title .close-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0 4px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+
+        #coordinatesDisplay .coord-title .close-btn:hover {
+            opacity: 1;
+        }
+
+        #coordinatesDisplay .coord-item {
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #coordinatesDisplay .coord-item:last-child {
+            border-bottom: none;
+        }
+
+        .coord-label {
+            color: #81c784;
+            font-size: 12px;
+            margin-right: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 120px;
+        }
+
+        .coord-value {
+            color: #fff;
+            font-weight: bold;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .coord-changed {
+            color: #ffd54f !important;
+        }
+
+        #toggleCoordsBtn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10000;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.3s;
+        }
+
+        #toggleCoordsBtn:hover {
+            transform: scale(1.1);
+        }
+
+        #toggleCoordsBtn.show {
+            display: flex !important;
+        }
+
+        #coordinatesDisplay.show {
+            display: block !important;
+        }
+
+        .coord-status {
+            font-size: 11px;
+            color: #aaa;
+            text-align: center;
+            padding: 4px 0;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin-top: 4px;
+        }
+
+        /* Адаптация для мобильных устройств */
+        @media (max-width: 768px) {
+            #coordinatesDisplay {
+                bottom: 70px;
+                right: 10px;
+                left: 10px;
+                max-height: 200px;
+                font-size: 11px;
+                min-width: auto;
+            }
+            #toggleCoordsBtn {
+                bottom: 10px;
+                right: 10px;
+                width: 38px;
+                height: 38px;
+                font-size: 16px;
+            }
+            .coord-label {
+                max-width: 80px;
+            }
         }
     </style>
 </head>
@@ -131,58 +289,45 @@
                         </select>
                     </div>
                     
-                  
-                    <!--   Загрузка GIF   -->
+                    <!-- Загрузка GIF -->
                     <div class="dropdown ms-2">
-    <button class="btn btn-success btn-sm dropdown-toggle" 
-            type="button" 
-            data-bs-toggle="dropdown">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="me-1">
-            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
-        </svg>
-        GIF отчет
-    </button>
-    <ul class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px;">
-        <li>
-            <div class="mb-2">
-                <label class="form-label small fw-bold">Интервал между кадрами</label>
-                <select id="gifInterval" class="form-select form-select-sm">
-                    <option value="15">15 мин</option>
-                    <option value="30" selected>30 мин</option>
-                    <option value="60">1 час</option>
-                    <option value="120">2 часа</option>
-                </select>
-            </div>
-        </li>
-        <li>
-            <div class="mb-2">
-                <label class="form-label small fw-bold">Длительность кадра</label>
-                <select id="gifDuration" class="form-select form-select-sm">
-                    <option value="0.5">0.5 сек</option>
-                    <option value="0.8">0.8 сек</option>
-                    <option value="1.0" selected>1.0 сек</option>
-                    <option value="1.5">1.5 сек</option>
-                    <option value="2.0">2.0 сек</option>
-                </select>
-            </div>
-        </li>
-        <li>
-            <button class="btn btn-success btn-sm w-100" onclick="downloadGif()">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="me-1">
-                    <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-                    <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
-                </svg>
-                Скачать GIF
-            </button>
-        </li>
-        <li class="mt-2">
-            <small class="text-muted" id="gifInfo">Ожидание данных...</small>
-        </li>
-    </ul>
-</div>
-
-
+                        <button class="btn btn-success btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            GIF отчет
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px;">
+                            <li>
+                                <div class="mb-2">
+                                    <label class="form-label small fw-bold">Интервал между кадрами</label>
+                                    <select id="gifInterval" class="form-select form-select-sm">
+                                        <option value="15">15 мин</option>
+                                        <option value="30" selected>30 мин</option>
+                                        <option value="60">1 час</option>
+                                        <option value="120">2 часа</option>
+                                    </select>
+                                </div>
+                            </li>
+                            <li>
+                                <div class="mb-2">
+                                    <label class="form-label small fw-bold">Длительность кадра</label>
+                                    <select id="gifDuration" class="form-select form-select-sm">
+                                        <option value="0.5">0.5 сек</option>
+                                        <option value="0.8">0.8 сек</option>
+                                        <option value="1.0" selected>1.0 сек</option>
+                                        <option value="1.5">1.5 сек</option>
+                                        <option value="2.0">2.0 сек</option>
+                                    </select>
+                                </div>
+                            </li>
+                            <li>
+                                <button class="btn btn-success btn-sm w-100" onclick="downloadGif()">
+                                    Скачать GIF
+                                </button>
+                            </li>
+                            <li class="mt-2">
+                                <small class="text-muted">Настройте параметры и скачайте GIF</small>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
@@ -212,11 +357,29 @@
         </div>
     </div>
 
+    <!-- Кнопка переключения отображения координат -->
+    <button id="toggleCoordsBtn" class="btn btn-primary" onclick="toggleCoordinates()" title="Показать координаты узлов">
+        📍
+    </button>
+
+    <!-- Блок отображения координат -->
+    <div id="coordinatesDisplay">
+        <div class="coord-title">
+            <span>📍 Координаты узлов</span>
+            <button class="close-btn" onclick="closeCoordinates()" title="Закрыть">✕</button>
+        </div>
+        <div id="coordinatesList"></div>
+        <div class="coord-status" id="coordStatus">Перетащите узел для обновления</div>
+    </div>
+
     <script>
         // Переменные состояния
         let currentZoneType = '{{ zone_types[0] if zone_types else "main" }}';
         let refreshTimer = null;
         let isAutoRefreshEnabled = true;
+        let showCoords = false;
+        let lastNodePositions = {};
+        let graphDivInstance = null;
 
         // Функция переключения типа зоны
         function switchZoneType(type) {
@@ -240,7 +403,7 @@
         }
 
         function startAutoRefresh() {
-            stopAutoRefresh(); // Останавливаем старый таймер
+            stopAutoRefresh();
             
             const intervalSelect = document.getElementById('refreshInterval');
             const intervalMs = parseInt(intervalSelect.value) * 1000;
@@ -250,17 +413,12 @@
                     loadSankeyData(false);
                 }
             }, intervalMs);
-            
-            // Показываем статус
-            const minutes = intervalMs / 60000;
-            console.log(`Автообновление запущено (каждые ${minutes} мин)`);
         }
 
         function stopAutoRefresh() {
             if (refreshTimer) {
                 clearInterval(refreshTimer);
                 refreshTimer = null;
-                console.log('Автообновление остановлено');
             }
         }
 
@@ -275,14 +433,12 @@
 
         // --- Вспомогательные функции ---
 
-        // Обновление заголовка
         function updateTitle(dateString) {
             const formattedDate = dateString ? formatDate(dateString) : '{{ default_date }}';
             document.getElementById('topMessage').textContent = 
                 `Диаграмма потоков ${currentZoneType} ${formattedDate}`;
         }
 
-        // Форматирование даты
         function formatDate(dateString) {
             if (!dateString) return '{{ default_date }}';
             const date = new Date(dateString);
@@ -293,7 +449,6 @@
             });
         }
 
-        // Отображение сообщений
         function showMessage(msg, type) {
             const div = document.getElementById('uploadMessage');
             const alertClass = type === 'error' ? 'alert-danger' : 
@@ -307,7 +462,6 @@
             setTimeout(() => { div.innerHTML = ''; }, 5000);
         }
 
-        // Показ/скрытие индикатора загрузки
         function showLoading() {
             document.getElementById('loadingIndicator').classList.remove('d-none');
             document.getElementById('loadingSpinner').style.display = 'block';
@@ -318,12 +472,225 @@
             document.getElementById('loadingSpinner').style.display = 'none';
         }
 
+        // --- Функции для работы с координатами ---
+
+        function toggleCoordinates() {
+            showCoords = !showCoords;
+            const display = document.getElementById('coordinatesDisplay');
+            const btn = document.getElementById('toggleCoordsBtn');
+            
+            if (showCoords) {
+                display.classList.add('show');
+                btn.classList.add('show');
+                btn.textContent = '📍';
+                btn.title = 'Скрыть координаты узлов';
+                // Принудительно обновляем координаты
+                setTimeout(updateCoordinates, 200);
+            } else {
+                display.classList.remove('show');
+                btn.classList.add('show'); // Кнопка всегда видна
+                btn.textContent = '📍';
+                btn.title = 'Показать координаты узлов';
+            }
+        }
+
+        function closeCoordinates() {
+            showCoords = false;
+            const display = document.getElementById('coordinatesDisplay');
+            const btn = document.getElementById('toggleCoordsBtn');
+            
+            display.classList.remove('show');
+            btn.classList.add('show'); // Кнопка всегда видна
+            btn.textContent = '📍';
+            btn.title = 'Показать координаты узлов';
+        }
+
+        function getNodeCoordinates(graphDiv) {
+            try {
+                // Пытаемся получить координаты из layout
+                if (graphDiv.layout && graphDiv.layout.sankey && 
+                    graphDiv.layout.sankey.node && 
+                    graphDiv.layout.sankey.node.x && 
+                    graphDiv.layout.sankey.node.y) {
+                    
+                    const nodeX = graphDiv.layout.sankey.node.x;
+                    const nodeY = graphDiv.layout.sankey.node.y;
+                    const labels = graphDiv.layout.sankey.node.label || [];
+                    
+                    const positions = [];
+                    for (let i = 0; i < Math.min(nodeX.length, nodeY.length); i++) {
+                        const label = labels[i] || `Node ${i}`;
+                        positions.push({
+                            label: label,
+                            x: nodeX[i],
+                            y: nodeY[i],
+                            index: i
+                        });
+                    }
+                    return positions;
+                }
+                
+                // Альтернативный способ: получить из data
+                if (graphDiv.data && graphDiv.data.length > 0) {
+                    const data = graphDiv.data[0];
+                    if (data && data.node && data.node.x && data.node.y) {
+                        const nodeX = data.node.x;
+                        const nodeY = data.node.y;
+                        const labels = data.node.label || [];
+                        
+                        const positions = [];
+                        for (let i = 0; i < Math.min(nodeX.length, nodeY.length); i++) {
+                            const label = labels[i] || `Node ${i}`;
+                            positions.push({
+                                label: label,
+                                x: nodeX[i],
+                                y: nodeY[i],
+                                index: i
+                            });
+                        }
+                        return positions;
+                    }
+                }
+                
+                return [];
+            } catch (e) {
+                console.warn('Ошибка получения координат:', e);
+                return [];
+            }
+        }
+
+        function updateCoordinates() {
+            const graphDiv = document.querySelector('.plotly-graph-div');
+            if (!graphDiv || typeof Plotly === 'undefined') {
+                document.getElementById('coordinatesList').innerHTML = '<div style="color: #aaa;">График не загружен</div>';
+                return;
+            }
+
+            try {
+                const positions = getNodeCoordinates(graphDiv);
+                
+                if (positions.length === 0) {
+                    document.getElementById('coordinatesList').innerHTML = 
+                        '<div style="color: #aaa;">Нет данных об узлах. Перетащите узел, чтобы увидеть координаты.</div>';
+                    document.getElementById('coordStatus').textContent = 'Ожидание данных...';
+                    return;
+                }
+                
+                let html = '';
+                let hasChanges = false;
+                let changedNodes = [];
+                
+                positions.forEach(p => {
+                    const key = `${p.label}_${p.index}`;
+                    const roundedX = Math.round(p.x * 100) / 100;
+                    const roundedY = Math.round(p.y * 100) / 100;
+                    
+                    // Проверяем, изменилась ли позиция
+                    let isChanged = false;
+                    if (lastNodePositions[key]) {
+                        const lastX = Math.round(lastNodePositions[key].x * 100) / 100;
+                        const lastY = Math.round(lastNodePositions[key].y * 100) / 100;
+                        if (lastX !== roundedX || lastY !== roundedY) {
+                            hasChanges = true;
+                            isChanged = true;
+                            changedNodes.push(p.label);
+                        }
+                    }
+                    
+                    lastNodePositions[key] = { x: p.x, y: p.y };
+                    
+                    const changeClass = isChanged ? 'coord-changed' : '';
+                    const changeIndicator = isChanged ? ' ✦' : '';
+                    
+                    html += `
+                        <div class="coord-item">
+                            <span class="coord-label" title="${p.label}">${p.label}</span>
+                            <span class="coord-value ${changeClass}">(${roundedX.toFixed(2)}, ${roundedY.toFixed(2)})${changeIndicator}</span>
+                        </div>
+                    `;
+                });
+                
+                document.getElementById('coordinatesList').innerHTML = html;
+                
+                // Обновляем статус
+                if (hasChanges && changedNodes.length > 0) {
+                    document.getElementById('coordStatus').textContent = 
+                        `🔄 Перемещены: ${changedNodes.join(', ')}`;
+                    document.getElementById('coordStatus').style.color = '#ffd54f';
+                } else {
+                    document.getElementById('coordStatus').textContent = 
+                        `✓ ${positions.length} узлов. Перетащите узел для обновления`;
+                    document.getElementById('coordStatus').style.color = '#aaa';
+                }
+                
+            } catch (e) {
+                console.warn('Ошибка при обновлении координат:', e);
+                document.getElementById('coordinatesList').innerHTML = 
+                    '<div style="color: #aaa;">Ошибка получения координат</div>';
+            }
+        }
+
+        // Настройка обработчика перемещения узлов
+        function setupNodeDragHandler(graphDiv) {
+            if (!graphDiv) return;
+            
+            graphDivInstance = graphDiv;
+            
+            // Удаляем старые обработчики
+            if (graphDiv._sankeyDragHandler) {
+                graphDiv.removeListener('plotly_relayout', graphDiv._sankeyDragHandler);
+            }
+            if (graphDiv._sankeyAfterPlotHandler) {
+                graphDiv.removeListener('plotly_afterplot', graphDiv._sankeyAfterPlotHandler);
+            }
+            
+            // Обработчик события relayout (срабатывает при перемещении)
+            const relayoutHandler = function(eventData) {
+                // Проверяем, что это событие перемещения узлов
+                if (eventData && eventData['sankey.node.x'] !== undefined) {
+                    // Небольшая задержка для обновления данных
+                    setTimeout(() => {
+                        if (showCoords) {
+                            updateCoordinates();
+                            // Показываем уведомление
+                            showMessage('Узел перемещен. Координаты обновлены.', 'info');
+                        }
+                    }, 100);
+                }
+            };
+            
+            graphDiv._sankeyDragHandler = relayoutHandler;
+            graphDiv.on('plotly_relayout', relayoutHandler);
+            
+            // Обработчик после рендеринга
+            const afterPlotHandler = function() {
+                if (showCoords) {
+                    setTimeout(updateCoordinates, 150);
+                }
+            };
+            
+            graphDiv._sankeyAfterPlotHandler = afterPlotHandler;
+            graphDiv.on('plotly_afterplot', afterPlotHandler);
+            
+            // Также обрабатываем событие hover для обновления при наведении
+            const hoverHandler = function() {
+                if (showCoords) {
+                    setTimeout(updateCoordinates, 50);
+                }
+            };
+            
+            if (graphDiv._sankeyHoverHandler) {
+                graphDiv.removeListener('plotly_hover', graphDiv._sankeyHoverHandler);
+            }
+            graphDiv._sankeyHoverHandler = hoverHandler;
+            graphDiv.on('plotly_hover', hoverHandler);
+        }
+
         // Основная функция загрузки данных
         function loadSankeyData(showIndicator = true) {
             const date = document.getElementById('analysisDate').value;
             const zoneType = currentZoneType;
 
-            // Обновляем заголовок
             updateTitle(date);
 
             if (showIndicator) {
@@ -342,25 +709,37 @@
                         hideLoading();
                     }
                     
+                    // Сбрасываем сохраненные позиции при загрузке новых данных
+                    lastNodePositions = {};
+                    
                     requestAnimationFrame(function() {
                         setTimeout(function() {
-                            var graphDiv = document.querySelector('.plotly-graph-div');
+                            const graphDiv = document.querySelector('.plotly-graph-div');
                             if (graphDiv && typeof Plotly !== 'undefined') {
-                                // Обновляем layout с autosize
+                                // Настройка размеров
                                 Plotly.relayout(graphDiv, {
                                     autosize: true,
-                                    height: undefined  // Убираем фиксированную высоту
+                                    height: undefined
                                 });
                                 
                                 Plotly.Plots.resize(graphDiv);
                                 
-                                requestAnimationFrame(function() {
-                                    $('#chartContainer').css('visibility', 'visible');
-                                });
+                                // Настраиваем обработчик перемещения
+                                setupNodeDragHandler(graphDiv);
+                                
+                                // Обновляем координаты после загрузки
+                                setTimeout(() => {
+                                    if (showCoords) {
+                                        updateCoordinates();
+                                    }
+                                    requestAnimationFrame(function() {
+                                        $('#chartContainer').css('visibility', 'visible');
+                                    });
+                                }, 300);
                             } else {
                                 $('#chartContainer').css('visibility', 'visible');
                             }
-                        }, 50);
+                        }, 100);
                     });
                 },
                 error: function(xhr) {
@@ -378,10 +757,23 @@
             });
         }
 
+        // --- Функция для GIF ---
+
+        function downloadGif() {
+            const date = document.getElementById('analysisDate').value;
+            const zoneType = currentZoneType;
+            const interval = document.getElementById('gifInterval').value;
+            const duration = document.getElementById('gifDuration').value;
+        
+            const url = `/sankey-gif?date=${date}&zone_type=${zoneType}&interval_minutes=${interval}&duration=${duration}&max_frames=24`;
+    
+            showMessage('Генерация GIF началась. Файл будет скачан автоматически', 'success');
+            window.open(url, '_blank');
+        }
+
         // --- Инициализация ---
 
         $(document).ready(function() {
-            // Устанавливаем начальное значение зоны
             const zoneTypes = {{ zone_types|tojson }};
             if (zoneTypes && zoneTypes.length > 0) {
                 currentZoneType = zoneTypes[0];
@@ -404,92 +796,44 @@
             if (document.getElementById('autoRefreshSwitch').checked) {
                 startAutoRefresh();
             }
+
+            // Показываем кнопку координат всегда после загрузки страницы
+            setTimeout(() => {
+                const btn = document.getElementById('toggleCoordsBtn');
+                if (btn) {
+                    btn.classList.add('show');
+                }
+            }, 1000);
+
+            // Обновляем координаты при изменении размера окна
+            let resizeTimeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    if (showCoords) {
+                        updateCoordinates();
+                    }
+                }, 500);
+            });
         });
 
         // Очистка таймера при закрытии страницы
         window.addEventListener('beforeunload', function() {
             stopAutoRefresh();
+            
+            // Очищаем обработчики
+            if (graphDivInstance) {
+                if (graphDivInstance._sankeyDragHandler) {
+                    graphDivInstance.removeListener('plotly_relayout', graphDivInstance._sankeyDragHandler);
+                }
+                if (graphDivInstance._sankeyAfterPlotHandler) {
+                    graphDivInstance.removeListener('plotly_afterplot', graphDivInstance._sankeyAfterPlotHandler);
+                }
+                if (graphDivInstance._sankeyHoverHandler) {
+                    graphDivInstance.removeListener('plotly_hover', graphDivInstance._sankeyHoverHandler);
+                }
+            }
         });
-
-
-    // Функция скачивания GIF с информацией о прогрессе
-async function downloadGif() {
-    const date = document.getElementById('analysisDate').value;
-    const zoneType = currentZoneType;
-    const interval = document.getElementById('gifInterval').value;
-    const duration = document.getElementById('gifDuration').value;
-    
-    const btn = document.querySelector('.btn-success.dropdown-toggle');
-    const originalText = btn.innerHTML;
-    
-    // Показываем прогресс
-    btn.innerHTML = `
-        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-        Генерация...
-    `;
-    btn.disabled = true;
-    
-    try {
-        showMessage('Генерация GIF-отчета... Это может занять 10-30 секунд', 'info');
-        
-        // Проверяем доступность данных
-        const infoResponse = await fetch(`/sankey-gif-info?date=${date}&zone_type=${zoneType}`);
-        const infoData = await infoResponse.json();
-        
-        if (infoData.valid_snapshots > 0) {
-            document.getElementById('gifInfo').textContent = 
-                `Найдено ${infoData.valid_snapshots} снимков с данными`;
-        }
-        
-        // Скачиваем GIF
-        const url = `/sankey-gif?date=${date}&zone_type=${zoneType}&interval_minutes=${interval}&duration=${duration}&max_frames=24`;
-        
-        // Открываем в новой вкладке для скачивания
-        window.open(url, '_blank');
-        
-        showMessage('Генерация GIF началась. Файл будет скачан автоматически', 'success');
-        
-    } catch (error) {
-        showMessage('Ошибка: ' + error.message, 'error');
-    } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-    }
-}
-
-
-// Функция для обновления информации о GIF при смене даты
-async function updateGifInfo() {
-    const date = document.getElementById('analysisDate').value;
-    const zoneType = currentZoneType;
-    
-    try {
-        const response = await fetch(`/sankey-gif-info?date=${date}&zone_type=${zoneType}`);
-        const data = await response.json();
-        
-        if (data.valid_snapshots > 0) {
-            document.getElementById('gifInfo').textContent = 
-                `${data.valid_snapshots} снимков с данными (${data.zones_count} зон)`;
-        } else {
-            document.getElementById('gifInfo').textContent = 
-                'Нет данных для выбранной даты';
-        }
-    } catch (error) {
-        document.getElementById('gifInfo').textContent = 'Ошибка получения информации';
-    }
-}
-
-// Вызываем при загрузке страницы и смене даты
-$(document).ready(function() {
-    // ... существующий код ...
-    
-    // Добавляем обновление информации о GIF
-    updateGifInfo();
-    document.getElementById('analysisDate').addEventListener('change', updateGifInfo);
-    document.querySelector('.dropdown-menu').addEventListener('show.bs.dropdown', updateGifInfo);
-});
-
-
     </script>
 
     <!-- Bootstrap JS в конце -->

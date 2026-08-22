@@ -12,10 +12,9 @@ from app.services.data_service import DataService
 
 logger = logging.getLogger(__name__)
 
-ENABLE_CALIBRATION = True  # Глобальная переменная в начале файла
+ENABLE_CALIBRATION = True
 
 ZONE_POSITIONS = {
-    # Основные зоны
     'M150. Выход с линии DKD Off': {'x': 0.01, 'y': 0.3, 'color': '#FFEAA7'},
     'M151. Выход с линии DKD+': {'x': 0.01, 'y': 0.8, 'color': '#FFEAA7'},
     'БелЗона_FORI': {'x': 0.1, 'y': 0.7, 'color': '#FFEAA7'},
@@ -27,9 +26,10 @@ ZONE_POSITIONS = {
     'ТиД': {'x': 0.8, 'y': 0.7, 'color': '#4ECDC4'},
     'M471. Отказ по качеству': {'x': 0.6, 'y': 0.6, 'color': '#96CEB4'},
     'M445. Зона выборочного контроля': {'x': 0.45, 'y': 0.6, 'color': '#FFEAA7'},
-    'M422. Некомплекты': {'x': 0.95, 'y': 0.7, 'color': '#FFEAA7'},
+    'M422. Некомплекты': {'x': 0.89, 'y': 0.87, 'color': '#FFEAA7'},
     'M500. Приемка на СГП (MADU)': {'x': 0.95, 'y': 0.3, 'color': '#FFEAA7'},
     'M483. Чистые автомобили': {'x': 0.95, 'y': 0.5, 'color': '#FFEAA7'},
+    'M412. Ретрофит Телематика': {'x': 0.9, 'y': 0.1, 'color': '#FFEAA7'},
     'calibration': {'x': -0.1, 'y': 0.5, 'color': 'rgba(0,0,0,0)'}, 
 }
 
@@ -54,20 +54,12 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
     """
 
     """
-    
-	
+    	
     # Фильтрация по дате отчета
     target_date = pd.Timestamp(date).date()	
     
-    
-	# Фильтрация, отчетная зона существует или в Точки Регистрации, или next_zone
-    df_filtered = df[
-        df['next_zone'].isin(allowed_zones) |
-        df['Точка регистрации'].isin(allowed_zones)
-        ]
-
-    if df_filtered.empty:
-        return {'nodes': [], 'links': [], 'message': 'Нет данных'}
+    #if df_filtered.empty:
+    #    return {'nodes': [], 'links': [], 'message': 'Нет данных'}
     
     # Подготовка DataFrame для подсчета входа и выхода
     # Вход в Точку регистрации происходит во время регистрации этой точки
@@ -76,7 +68,7 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
     df_enter = df[df['Дата'].dt.date == target_date].copy()
     df_exit = df[df['exit_time'].dt.date == target_date].copy()
       
-    # Подсчет количесива переходов между точками за день
+    # Подсчет количества переходов между точками за день
     # Фильтрация происходит по df_exit, т.к. выход из текущей точки в следующую
     # происходит во время входа в следующую точку
  
@@ -97,7 +89,6 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
         transition_counts['next_zone']
     ]).unique()
 	
-    logger.info(f'{__name__} transition_counts {transition_counts}')
     logger.info(f'{__name__} all zones {all_zones}')
     
     # Считаем входы и выходы с помощью groupby
@@ -141,8 +132,6 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
     return {'nodes': nodes, 'links': links, 'message': None}
 
 
-
-# ============ ФУНКЦИЯ ДЛЯ ОПРЕДЕЛЕНИЯ ЦВЕТОВ СВЯЗЕЙ ============
 def get_link_colors(sources: list, node_colors: list, opacity: float = 0.4) -> list:
     """
     Определяет цвета для связей на основе цвета узлов-источников
@@ -182,8 +171,6 @@ def get_link_colors(sources: list, node_colors: list, opacity: float = 0.4) -> l
             link_colors.append(f'rgba(100, 100, 255, {opacity})')
     
     return link_colors
-# ================================================================
-
 
 
 # ============ НОВАЯ ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ КАЛИБРОВКИ ============

@@ -2,50 +2,27 @@ import os
 import tempfile
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import imageio.v2 as imageio
 from PIL import Image
-import numpy as np
 from app.services.data_service import DataService
-from app.services.sankey_service import create_sankey_chart, prepare_sankey_data, add_calibration_node, get_link_colors
-from app.services.sankey_service import ZONE_POSITIONS, ENABLE_CALIBRATION
-import random
+from app.services.sankey_service import ZONE_POSITIONS, ENABLE_CALIBRATION, add_calibration_node, get_link_colors
 
 logger = logging.getLogger(__name__)
 
 class GifService:
-    """Сервис для создания GIF-отчетов динамики движения (оптимизированный)"""
+    """Сервис для создания GIF-отчетов динамики движения"""
     
     def __init__(self):
         self.data_service = DataService()
-        self._cached_data = None
-        self._cached_zones = None
-        self._cached_mapping = None
-    
+
+
     def __enter__(self):
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.data_service.__exit__(exc_type, exc_val, exc_tb)
-    
-    def _load_and_prepare_data(self, date: str, zone_type: str) -> tuple:
-        """
-        Однократная загрузка и подготовка данных
-        """
-        if self._cached_data is None:
-            with self.data_service:
-                df = self.data_service.get_data(date)
-                zone_to_group, allowed_zones = self.data_service._prepare_zones_and_mapping(zone_type, df)
-                df_transformed = self.data_service._transform_dataframe(df, zone_to_group)
-                
-                self._cached_data = df_transformed
-                self._cached_zones = allowed_zones
-                self._cached_mapping = zone_to_group
-        
-        return self._cached_data, self._cached_zones, self._cached_mapping
     
     def prepare_sankey_data_for_time(
         self, 
@@ -54,43 +31,24 @@ class GifService:
         allowed_zones: list,
         target_date: date
     ) -> dict:
-        """
-        Подготовка данных Sankey для конкретного момента времени
-        (оптимизированная версия)
-        """
-        # Фильтруем данные до текущего времени
-        df_snapshot = df[df['Дата'] <= current_time].copy()
+        """Подготовка данных Sankey для конкретного момента времени"""
+        df_enter = df[df['Дата'] <= current_time].copy()
+        df_exit = df[df['exit_time'] <= current_time].copy()
         
-        if df_snapshot.empty:
-            return {'nodes': [], 'links': [], 'message': 'Нет данных'}
+        df_enter = df_enter[df_enter['Дата'].dt.date == target_date].copy()
+        df_exit = df_exit[df_exit['exit_time'].dt.date == target_date].copy()
         
-        # Фильтруем по разрешенным зонам
-        df_filtered = df_snapshot[
-            df_snapshot['next_zone'].isin(allowed_zones) |
-            df_snapshot['Точка регистрации'].isin(allowed_zones)
-        ]
-        
-        if df_filtered.empty:
-            return {'nodes': [], 'links': [], 'message': 'Нет данных'}
-        
-        # Входы и выходы за весь период до current_time
-        df_enter = df_filtered[df_filtered['Дата'].dt.date == target_date].copy()
-        df_exit = df_filtered[df_filtered['exit_time'].dt.date == target_date].copy()
-        
-        # Подсчет переходов
         df_transitions = df_exit.sort_values(['Заказ', 'exit_time'])
         transition_counts = (df_transitions
                             .groupby(['Точка регистрации', 'next_zone'])
                             .size()
                             .reset_index(name='count'))
         
-        # Все уникальные зоны
         all_zones = pd.concat([
             transition_counts['Точка регистрации'], 
             transition_counts['next_zone']
         ]).unique()
         
-        # Статистика входов/выходов
         out_stats = (df_exit['Точка регистрации']
                     .value_counts()
                     .to_dict())
@@ -99,7 +57,6 @@ class GifService:
                    .value_counts()
                    .to_dict())
         
-        # Создаем узлы
         nodes = []
         node_to_index = {}
         allowed_zones = list(set(allowed_zones) & set(all_zones))
@@ -110,7 +67,6 @@ class GifService:
             nodes.append(label)
             node_to_index[zone] = i
         
-        # Создаем связи
         links = []
         for _, row in transition_counts.iterrows():
             source = row['Точка регистрации']
@@ -131,37 +87,29 @@ class GifService:
         zone_type: str = "main",
         interval_minutes: int = 30
     ) -> tuple:
-        """
-        Оптимизированное получение снимков - данные загружаются один раз
-        """
+        """Получение снимков с однократной загрузкой данных"""
         target_date = pd.Timestamp(date).date()
         
-        # Однократная загрузка и подготовка данных
-        df_transformed, allowed_zones, _ = self._load_and_prepare_data(date, zone_type)
+        # Загрузка данных
+        with self.data_service:
+            df = self.data_service.get_data(date)
+            zone_to_group, allowed_zones = self.data_service._prepare_zones_and_mapping(zone_type, df)
+            df_transformed = self.data_service._transform_dataframe(df, zone_to_group)
         
-        # Создаем временные метки для снимков (с 6:00 до 23:59)
         start_time = datetime.combine(target_date, datetime.min.time().replace(hour=6))
         end_time = datetime.combine(target_date, datetime.min.time().replace(hour=23, minute=59))
         
         snapshots = []
         current_time = start_time
         
-        # Предварительная фильтрация данных по дате (для ускорения)
-        df_day = df_transformed[
-            (df_transformed['Дата'].dt.date == target_date) |
-            (df_transformed['exit_time'].dt.date == target_date)
-        ].copy()
-        
         while current_time <= end_time:
-            # Подготавливаем данные для текущего момента
             sankey_data = self.prepare_sankey_data_for_time(
-                df_day,
+                df_transformed,
                 current_time,
                 allowed_zones,
                 target_date
             )
             
-            # Подсчет общего количества переходов
             total_flow = sum(link['value'] for link in sankey_data.get('links', []))
             
             snapshots.append({
@@ -184,10 +132,7 @@ class GifService:
         duration: float = 1.0,
         max_frames: int = 24
     ) -> Optional[str]:
-        """
-        Создает GIF-отчет динамики движения (оптимизированный)
-        """
-        # Получаем снимки (данные загружаются один раз)
+        """Создает GIF-отчет динамики движения"""
         snapshots, allowed_zones = self.get_hourly_snapshots_optimized(
             date, zone_type, interval_minutes
         )
@@ -196,24 +141,20 @@ class GifService:
             logger.warning("Нет данных для создания GIF")
             return None
         
-        # Фильтруем только снимки с данными
         valid_snapshots = [s for s in snapshots if s['sankey_data'].get('nodes')]
         
         if not valid_snapshots:
             logger.warning("Нет снимков с данными для создания GIF")
             return None
         
-        # Ограничиваем количество кадров
         if len(valid_snapshots) > max_frames:
             step = max(1, len(valid_snapshots) // max_frames)
             valid_snapshots = valid_snapshots[::step]
         
-        # Создаем временную папку для кадров
         with tempfile.TemporaryDirectory() as temp_dir:
             frame_paths = []
             
             for i, snapshot in enumerate(valid_snapshots):
-                # Создаем диаграмму для текущего снимка
                 fig = self._create_snapshot_figure(
                     snapshot, 
                     date, 
@@ -223,19 +164,16 @@ class GifService:
                     len(valid_snapshots)
                 )
                 
-                # Сохраняем кадр как изображение
                 frame_path = os.path.join(temp_dir, f"frame_{i:03d}.png")
                 fig.write_image(frame_path, width=1200, height=800, scale=1.2)
                 frame_paths.append(frame_path)
             
-            # Создаем GIF
             if output_path is None:
                 output_path = os.path.join(
                     tempfile.gettempdir(),
                     f"sankey_dynamics_{date}_{zone_type}.gif"
                 )
             
-            # Читаем изображения и создаем GIF
             images = []
             for frame_path in frame_paths:
                 img = Image.open(frame_path)
@@ -243,7 +181,6 @@ class GifService:
                     img = img.convert('RGB')
                 images.append(img)
             
-            # Сохраняем GIF
             if images:
                 images[0].save(
                     output_path,
@@ -270,14 +207,12 @@ class GifService:
         total_frames: int
     ) -> go.Figure:
         """Создает фигуру Plotly для отдельного снимка"""
-        from app.services.sankey_service import ZONE_POSITIONS, ENABLE_CALIBRATION, add_calibration_node, get_link_colors
         import random
         
         sankey_data = snapshot['sankey_data']
         time_label = snapshot['time']
         total_flow = snapshot.get('total_flow', 0)
         
-        # Если нет данных, создаем пустую фигуру с сообщением
         if not sankey_data.get('nodes') or not sankey_data.get('links'):
             fig = go.Figure()
             fig.update_layout(
@@ -301,7 +236,6 @@ class GifService:
             )
             return fig
         
-        # Если калибровка включена, добавляем ее
         if ENABLE_CALIBRATION:
             sankey_data = add_calibration_node(sankey_data, calibration_value=500)
         
@@ -313,7 +247,6 @@ class GifService:
             targets.append(link['target'])
             values.append(link['value'])
         
-        # Определяем позиции и цвета для каждой зоны
         node_positions = []
         node_colors = []
         
@@ -347,7 +280,6 @@ class GifService:
             )
         )])
         
-        # Информация о времени и прогрессе
         fig.update_layout(
             title={
                 'text': f'Динамика движения<br>{date} {time_label}',
