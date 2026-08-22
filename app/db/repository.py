@@ -8,6 +8,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text, distinct, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func
+from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.exc import SQLAlchemyError
+from typing import Tuple
 
 from .database import SQLiteSession, PostgresSession, get_sqlite_session
 from .models import Movement, Metadata, ZonesConfig, ZoneGroup, ZonesList
@@ -116,6 +119,7 @@ class MovementRepository:
         logger.info(f'{__name__} zones_list {zones_list.zones}')
         return zones_list.zones
 
+
     def load_from_excel_to_db(self, validated_data: list) -> Tuple[bool, str, int]:
         """Быстрая загрузка больших объемов данных"""
         
@@ -123,26 +127,23 @@ class MovementRepository:
             return False, "Нет данных", 0
 
         try:
-            batch_size = 1000  # Подберите под свой объем
+            batch_size = 1000
             inserted = 0
             
             with self.session.begin():
                 for i in range(0, len(validated_data), batch_size):
                     batch = validated_data[i:i + batch_size]
-                    numbers = [r['Номер'] for r in batch]
                     
-                    # Быстрая проверка существования
-                    existing = set(
-                        row[0] for row in self.session.query(Movement.Номер)
-                        .filter(Movement.Номер.in_(numbers)).all()
-                    )
+                    # Создаем запрос на вставку
+                    stmt = insert(Movement).values(batch)
                     
-                    new_batch = [r for r in batch if r['Номер'] not in existing]
+                    # Настраиваем игнорирование конфликтов по полю 'Номер'
+                    stmt = stmt.on_conflict_do_nothing(index_elements=['Номер'])
                     
-                    if new_batch:
-                        self.session.bulk_insert_mappings(Movement, new_batch)
-                        inserted += len(new_batch)
-            
+                    # Выполняем запрос
+                    result = self.session.execute(stmt)
+                    inserted += result.rowcount  # rowcount вернет количество реально вставленных записей
+                
             return True, f"Добавлено {inserted} записей", inserted
 
         except SQLAlchemyError as e:

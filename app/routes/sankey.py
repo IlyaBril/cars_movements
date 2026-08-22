@@ -37,11 +37,14 @@ async def sankey_page(request: Request):
         context={
             "default_date": default_date(),
             "zone_types": zone_types,
-            })
+        })
 
 
 @router.get("/sankey-chart")
-async def get_sankey_chart(date: str = Query(default=default_date()), zone_type: str = Query(default="main")):
+async def get_sankey_chart(
+    date: str = Query(default=default_date()), 
+    zone_type: str = Query(default="main")
+):
     try:
         data_service = DataService()
         with data_service:
@@ -60,10 +63,10 @@ async def get_sankey_chart(date: str = Query(default=default_date()), zone_type:
                 'responsive': True,
                 'autosizable': True,
                 'displayModeBar': True,
-                },
+            },
             default_width='100%',
             default_height='700px',
-            )
+        )
 
         return HTMLResponse(content=content)
     except Exception as e:
@@ -80,7 +83,7 @@ async def get_sankey_gif(
     max_frames: int = Query(default=24, ge=5, le=50)
 ):
     """
-    Создает GIF-отчет динамики движения за день (оптимизированный)
+    Создает GIF-отчет динамики движения за день
     
     - **date**: дата в формате YYYY-MM-DD
     - **zone_type**: тип зоны (main, etc.)
@@ -89,10 +92,11 @@ async def get_sankey_gif(
     - **max_frames**: максимальное количество кадров (5-50)
     """
     try:
-        start_time = datetime.now()
-        
         gif_service = GifService()
+        
         with gif_service:
+            start_time = datetime.now()
+            
             gif_path = gif_service.create_gif_report(
                 date=date,
                 zone_type=zone_type,
@@ -100,68 +104,26 @@ async def get_sankey_gif(
                 duration=duration,
                 max_frames=max_frames
             )
-        
-        elapsed = (datetime.now() - start_time).total_seconds()
-        logger.info(f"GIF создан за {elapsed:.2f} секунд")
-        
-        if gif_path and os.path.exists(gif_path):
-            return FileResponse(
-                gif_path,
-                media_type="image/gif",
-                filename=f"sankey_dynamics_{date}_{zone_type}.gif"
-            )
-        else:
-            return JSONResponse(
-                status_code=404,
-                content={"error": "Не удалось создать GIF-отчет"}
-            )
+            
+            elapsed = (datetime.now() - start_time).total_seconds()
+            logger.info(f"GIF создан за {elapsed:.2f} секунд")
+            
+            if gif_path and os.path.exists(gif_path):
+                return FileResponse(
+                    gif_path,
+                    media_type="image/gif",
+                    filename=f"sankey_dynamics_{date}_{zone_type}.gif"
+                )
+            else:
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": "Не удалось создать GIF-отчет"}
+                )
     
     except Exception as e:
         logger.error(f"Ошибка создания GIF: {e}", exc_info=True)
         return JSONResponse(
             status_code=500,
             content={"error": f"Ошибка: {str(e)}"}
-        )
-
-
-@router.get("/sankey-gif-info")
-async def get_gif_info(
-    date: str = Query(default=default_date()),
-    zone_type: str = Query(default="main")
-):
-    """
-    Получает информацию о доступных данных для создания GIF (оптимизированный)
-    """
-    try:
-        gif_service = GifService()
-        with gif_service:
-            snapshots, allowed_zones = gif_service.get_hourly_snapshots_optimized(
-                date=date,
-                zone_type=zone_type,
-                interval_minutes=30
-            )
-        
-        # Подсчет снимков с данными
-        valid_snapshots = [s for s in snapshots if s['sankey_data'].get('nodes')]
-        
-        return JSONResponse({
-            "date": date,
-            "zone_type": zone_type,
-            "total_snapshots": len(snapshots),
-            "valid_snapshots": len(valid_snapshots),
-            "zones_count": len(allowed_zones),
-            "snapshots": [
-                {
-                    "time": s['time'],
-                    "total_flow": s.get('total_flow', 0),
-                    "has_data": bool(s['sankey_data'].get('nodes'))
-                } for s in snapshots
-            ]
-        })
-    
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={"error": str(e)}
         )
 
