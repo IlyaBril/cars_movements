@@ -33,6 +33,7 @@ ZONE_POSITIONS = {
     'calibration': {'x': -0.1, 'y': 0.5, 'color': 'rgba(0,0,0,0)'}, 
 }
 
+
 class SankeyService:
     """Сервис для подготовки данных Sankey диаграммы"""
     
@@ -49,6 +50,11 @@ class SankeyService:
         self._sqlite_sesion.close()
         self._psql_session.close()
 
+    def get_zone_attributes(self, group_name):
+        zone_attrubites = self._movement_repo.get_zone_attributes(group_name)
+        
+        return
+    
 
 def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dict:
     """
@@ -232,7 +238,14 @@ def create_sankey_chart(
     zone_type: str,
     ) -> go.Figure:
 
+    logger.info(f'{__name__} zone type {zone_type}')
+
     sankey_data = prepare_sankey_data(df, date, allowed_zones)
+    service = SankeyService()
+    with service:
+        attrs = service.get_zone_attributes(zone_type)
+
+    logger.info(f'{__name__} attrs {attrs}')
 
 
 # ============ ВЫЗОВ ФУНКЦИИ КАЛИБРОВКИ ============

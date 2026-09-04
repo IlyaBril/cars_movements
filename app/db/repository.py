@@ -13,7 +13,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from typing import Tuple
 
 from .database import SQLiteSession, PostgresSession, get_sqlite_session
-from .models import Movement, Metadata, ZonesConfig, ZoneGroup, ZonesList
+from .models import Movement,  ZoneGroup, ZonesList
+#from .models import ZonesConfig, ZonesList, Metadata,
 
 
 logging.basicConfig(level=logging.INFO)
@@ -119,7 +120,6 @@ class MovementRepository:
         logger.info(f'{__name__} zones_list {zones_list.zones}')
         return zones_list.zones
 
-
     def load_from_excel_to_db(self, validated_data: list) -> Tuple[bool, str, int]:
         """Быстрая загрузка больших объемов данных"""
         
@@ -204,6 +204,10 @@ class MovementRepository:
         self.session.commit()
         return count
 
+#Sankey
+    def get_zone_attributes(self, group_name):
+        return self.session.query(ZoneGroup).filter_by(group_name=group_name).first()
+        
 
 class GroupRepository:
     """Репозиторий для работы с группами (SQLite)"""
@@ -211,28 +215,28 @@ class GroupRepository:
     def __init__(self, session: Session = None):
         self.session = session
     
-    def load_zones_from_db(self) -> Tuple[List[str], List[str]]:
-        """Загрузка конфигурации зон"""
-        config = self.session.query(ZonesConfig).order_by(ZonesConfig.id.desc()).first()
-        if config:
-            return json.loads(config.zones), json.loads(config.zones_rep)
-        
-        from app.config import DEFAULT_ZONES, DEFAULT_ZONES_REP
-        return DEFAULT_ZONES.copy(), DEFAULT_ZONES_REP.copy()
+    #def load_zones_from_db(self) -> Tuple[List[str], List[str]]:
+    #    """Загрузка конфигурации зон"""
+    #    config = self.session.query(ZonesConfig).order_by(ZonesConfig.id.desc()).first()
+    #    if config:
+    #        return json.loads(config.zones), json.loads(config.zones_rep)
+    #    
+    #    from app.config import DEFAULT_ZONES, DEFAULT_ZONES_REP
+    #    return DEFAULT_ZONES.copy(), DEFAULT_ZONES_REP.copy()
     
-    def save_zones_to_db(self, zones_list: List[str], zones_rep_list: List[str]) -> None:
-        """Сохранение конфигурации зон"""
-        config = self.session.query(ZonesConfig).order_by(ZonesConfig.id.desc()).first()
-        if config:
-            config.zones = json.dumps(zones_list, ensure_ascii=False)
-            config.zones_rep = json.dumps(zones_rep_list, ensure_ascii=False)
-        else:
-            config = ZonesConfig(
-                zones=json.dumps(zones_list, ensure_ascii=False),
-                zones_rep=json.dumps(zones_rep_list, ensure_ascii=False)
-            )
-            self.session.add(config)
-        self.session.commit()
+    #def save_zones_to_db(self, zones_list: List[str], zones_rep_list: List[str]) -> None:
+    #    """Сохранение конфигурации зон"""
+    #    config = self.session.query(ZonesConfig).order_by(ZonesConfig.id.desc()).first()
+    #    if config:
+    #        config.zones = json.dumps(zones_list, ensure_ascii=False)
+    #        config.zones_rep = json.dumps(zones_rep_list, ensure_ascii=False)
+    #    else:
+    #        config = ZonesConfig(
+    #            zones=json.dumps(zones_list, ensure_ascii=False),
+    #            zones_rep=json.dumps(zones_rep_list, ensure_ascii=False)
+    #        )
+    #        self.session.add(config)
+    #    self.session.commit()
     
     def load_groups_from_db(self,
         zone_names: Optional[List[str]] = None,

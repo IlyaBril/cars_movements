@@ -90,7 +90,7 @@ class DataService:
     def _prepare_zones_and_mapping(self, zone_type: str, df: pd.DataFrame) -> Tuple[List[str], List[str], Dict[str, str], List[str]]:
         """Подготовка списков зон и маппинга"""
 	
-        zones_list = self._movement_repo.get_zones_from_db(zone_type) 
+        zones_list = self._movement_repo.get_zones_from_db(zone_type)
         zones_list = json.loads(zones_list)		
         query = self._group_repo.load_groups_from_db(zones_list)
         
@@ -117,7 +117,8 @@ class DataService:
                 print(f"❌ Группа '{group_name}' пропущена. Нет доступных зон")
                 all_entities.remove(group_name)
     
-            print(f"Группы для замены: {zone_to_group}")      
+            print(f"Группы для замены: {zone_to_group}")
+        logger.info(f'{__name__} _prepare_zones_and_mapping return zone_to_group and zone_list')
         return zone_to_group, zones_list
 
     def _transform_dataframe(self, df: pd.DataFrame, zone_to_group: Dict[str, str]) -> pd.DataFrame:

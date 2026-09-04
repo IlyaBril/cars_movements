@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, TIMESTAMP, func
+from sqlalchemy import Column, Integer, String, DateTime, Text, TIMESTAMP, func, Float, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 from pydantic import BaseModel
@@ -20,11 +21,6 @@ class AnalysisResponse(BaseModel):
     data: Optional[List[ZoneStats]] = None
     
 
-class ZoneUpdateRequest(BaseModel):
-    zones: List[str]
-    zones_rep: List[str]
-    
-
 class Movement(Base):
     __tablename__ = 'movements'
     
@@ -34,7 +30,42 @@ class Movement(Base):
     Заказ = Column(String)
     Точка_регистрации = Column(String, name="Точка регистрации")
 
-	
+
+class ZoneReport(Base):
+    """Отчеты"""    
+    __tablename__ = 'report_zones'
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(Text, nullable=False)
+    report_zones = relationship("ZoneWithGroup", back_populates="report", cascade="all, delete-orphan")
+
+
+class ZoneWithGroup(Base):
+    """Зона с координатами и цветом для конкретной группы"""
+    __tablename__ = 'zone_with_group'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    x = Column(Float, nullable=False)
+    y = Column(Float, nullable=False)
+    color = Column(String, nullable=True)
+    order = Column(Integer, default=0)
+    report_id = Column(Integer, ForeignKey("report_zones.id", ondelete='CASCADE', name="fk_zone_report_id"), nullable=False)
+    report = relationship("ZoneReport", back_populates="report_zones")
+    
+    # Ссылка на родительскую зону (может быть NULL)
+    group_id = Column(Integer, ForeignKey('zone_with_group.id', ondelete='SET NULL', name="fk_zone_group_id"), nullable=True,)
+    
+    # Связи для иерархии
+    group = relationship("ZoneWithGroup", remote_side=[id], back_populates="children")
+    children = relationship("ZoneWithGroup", back_populates="group")
+
+    __table_args__ = (
+        UniqueConstraint("name", "group_id", name="uq_zone_name_per_group"),
+    )
+
+
+#Старые модели
 class ZonesList(Base):
     """Отчеты"""
     
@@ -52,29 +83,21 @@ class ZoneGroup(Base):
     group_name = Column(String, nullable=False, unique=True)
     zones = Column(Text, nullable=False)
     created_at = Column(TIMESTAMP, server_default=func.current_timestamp())
+ 
 
-
-#УДАЛИТЬ
-class ZonesConfig(Base):
-    __tablename__ = 'zones_config'
-    
-    id = Column(Integer, primary_key=True)
-    zones = Column(Text, nullable=False)
-    zones_rep = Column(Text, nullable=False)
-    updated_at = Column(TIMESTAMP, server_default=func.current_timestamp())
-
-
-class Metadata(Base):
-    __tablename__ = 'metadata'
-    
-    key = Column(String, primary_key=True)
-    value = Column(String)
-
-
-class GroupCreateRequest(BaseModel):
+# Pydantic модели для API
+class ZonePosition(BaseModel):
     name: str
-    zones: List[str]
-	
+    x: Optional[float] = None
+    y: Optional[float] = None
+    color: Optional[str] = None
+    order: Optional[int] = 0
 
-class GroupUpdateRequest(BaseModel):
-    groups: Dict[str, List[str]]  # {group_name: [zone1, zone2, ...]}
+class ZoneGroupCreate(BaseModel):
+    group_name: str
+    description: Optional[str] = None
+    zones: List[ZonePosition]
+
+class ZoneGroupUpdate(BaseModel):
+    zones: List[ZonePosition]
+

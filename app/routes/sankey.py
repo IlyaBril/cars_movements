@@ -29,14 +29,14 @@ def default_date():
 async def sankey_page(request: Request):
     data_service = DataService()
     with data_service:
-        zone_types = data_service.get_zones_types()
+        reports = data_service.get_zones_types()
         
     return templates.TemplateResponse(
         request=request,
         name="sankey.html",
         context={
             "default_date": default_date(),
-            "zone_types": zone_types,
+            "zone_types": reports,
         })
 
 
@@ -47,10 +47,11 @@ async def get_sankey_chart(
 ):
     try:
         data_service = DataService()
+        logger.info(f'{__name__} get sankey chart, data service done')
         with data_service:
             df = data_service.get_data(date)
+            logger.info(f'{__name__} get sankey chart, data service get data df {zone_type}')
             zone_to_group, allowed_zones = data_service._prepare_zones_and_mapping(zone_type, df)
-            logger.info(f'{__name__} zone to group and allowed zones {allowed_zones}')
             df = data_service._transform_dataframe(df, zone_to_group)
             if df.empty:
                 return HTMLResponse(content="<h3>Нет данных за выбранную дату</h3>")
