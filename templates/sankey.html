@@ -4,38 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sankey Диаграмма потоков</title>
-    <!-- Подключение Bootstrap -->
     <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    
+
     <style>
-        /* Минимальные кастомные стили - только то, чего нет в Bootstrap */
-        .navbar { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
-        
-        .chart-container { 
-            background: white; 
-            border-radius: 15px; 
-            padding: 20px; 
+
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
             margin-top: 20px;
             visibility: hidden;
         }
-        
-        .loading-spinner { 
-            display: none; 
-            text-align: center; 
-            padding: 50px; 
+
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 50px;
         }
-        
-        /* Унифицированные стили для графиков */
+
         #chartContent .plotly-graph-div,
         .js-plotly-plot {
             width: 100% !important;
             height: auto !important;
         }
-        
-        /* Координаты - используем Bootstrap для стилизации */
+
         #coordinatesDisplay {
             position: fixed;
             bottom: 20px;
@@ -47,26 +43,19 @@
             font-family: 'Courier New', monospace;
             font-size: 12px;
             z-index: 9999;
-            min-width: 220px;
-            max-width: 350px;
-            max-height: 350px;
+            min-width: 280px;
+            max-width: 400px;
+            max-height: 460px;
             overflow-y: auto;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             display: none;
             border: 1px solid rgba(255,255,255,0.1);
         }
-        
-        #coordinatesDisplay::-webkit-scrollbar {
-            width: 4px;
-        }
-        #coordinatesDisplay::-webkit-scrollbar-track {
-            background: rgba(255,255,255,0.05);
-        }
-        #coordinatesDisplay::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.3);
-            border-radius: 2px;
-        }
-        
+
+        #coordinatesDisplay::-webkit-scrollbar { width: 4px; }
+        #coordinatesDisplay::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+        #coordinatesDisplay::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 2px; }
+
         .coord-title {
             font-weight: bold;
             color: #4fc3f7;
@@ -78,26 +67,49 @@
             justify-content: space-between;
             align-items: center;
         }
-        
+
         .coord-item {
             padding: 3px 0;
             border-bottom: 1px solid rgba(255,255,255,0.05);
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            align-items: stretch;
         }
         .coord-item:last-child { border-bottom: none; }
-        
+
+        .coord-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
         .coord-label {
             color: #81c784;
             font-size: 12px;
             margin-right: 8px;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 120px;
+            max-width: 170px;
             white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
         }
-        
+        .coord-label:hover {
+            color: #ffd54f !important;
+            text-decoration: underline;
+        }
+
+        .coord-color-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+            border: 1px solid rgba(255,255,255,0.3);
+            vertical-align: middle;
+        }
+
         .coord-value {
             color: #fff;
             font-weight: bold;
@@ -105,7 +117,7 @@
             white-space: nowrap;
         }
         .coord-changed { color: #ffd54f !important; }
-        
+
         .coord-status {
             font-size: 11px;
             color: #aaa;
@@ -114,7 +126,28 @@
             border-top: 1px solid rgba(255,255,255,0.1);
             margin-top: 4px;
         }
-        
+
+        .color-picker-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 0 8px 4px;
+        }
+        .color-picker-row input[type="color"] {
+            width: 44px;
+            height: 26px;
+            padding: 0;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 4px;
+            background: none;
+            cursor: pointer;
+        }
+        .color-picker-row .picker-hint {
+            font-size: 10px;
+            color: #888;
+            margin-left: auto;
+        }
+
         .close-btn {
             background: none;
             border: none;
@@ -126,7 +159,7 @@
             transition: opacity 0.2s;
         }
         .close-btn:hover { opacity: 1; }
-        
+
         #toggleCoordsBtn {
             position: fixed;
             bottom: 20px;
@@ -150,14 +183,13 @@
         #toggleCoordsBtn:hover { transform: scale(1.1); }
         #toggleCoordsBtn.show { display: flex !important; }
         #coordinatesDisplay.show { display: block !important; }
-        
-        /* Мобильная адаптация */
+
         @media (max-width: 768px) {
             #coordinatesDisplay {
                 bottom: 70px;
                 right: 10px;
                 left: 10px;
-                max-height: 200px;
+                max-height: 260px;
                 font-size: 11px;
                 min-width: auto;
             }
@@ -168,31 +200,29 @@
                 height: 38px;
                 font-size: 16px;
             }
-            .coord-label { max-width: 80px; }
+            .coord-label { max-width: 110px; }
         }
     </style>
 </head>
 <body class="bg-light">
     <div class="container-fluid py-2">
-        <!-- Верхняя панель с заголовком и выбором даты -->
         <div class="row mb-2">
             <div class="col-12">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h1 id="topMessage" class="h5 mb-0">Диаграмма потоков {{ default_date }}</h1>
 
-                    <!-- Выбор зоны - используем Bootstrap классы -->
                     <div class="dropdown">
-                        <button class="btn btn-outline-primary btn-sm dropdown-toggle" 
-                                type="button" 
+                        <button class="btn btn-outline-primary btn-sm dropdown-toggle"
+                                type="button"
                                 data-bs-toggle="dropdown">
                             <span id="selectedZone">{{ zone_types[0] if zone_types else 'Выберите зону' }}</span>
                         </button>
                         <ul class="dropdown-menu">
                             {% for zone_type in zone_types %}
                             <li>
-                                <button class="dropdown-item" 
-                                        type="button" 
-                                        onclick="switchZoneType('{{ zone_type }}'); 
+                                <button class="dropdown-item"
+                                        type="button"
+                                        onclick="switchZoneType('{{ zone_type }}');
                                                  document.getElementById('selectedZone').textContent = '{{ zone_type }}'">
                                     {{ zone_type }}
                                 </button>
@@ -201,18 +231,17 @@
                         </ul>
                     </div>
 
-                    <!-- Управление датой и обновлением -->
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <div class="d-flex align-items-center gap-1">
                             <label for="analysisDate" class="form-label mb-0 small">Дата:</label>
                             <input type="date" id="analysisDate" value="{{ default_date }}" class="form-control form-control-sm" style="width: 150px;">
                         </div>
-                        
+
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input" type="checkbox" id="autoRefreshSwitch" checked>
                             <label class="form-check-label small" for="autoRefreshSwitch">Авто</label>
                         </div>
-                        
+
                         <select id="refreshInterval" class="form-select form-select-sm" style="width: auto;">
                             <option value="60">1 мин</option>
                             <option value="300" selected>5 мин</option>
@@ -221,8 +250,7 @@
                             <option value="3600">1 час</option>
                         </select>
                     </div>
-                    
-                    <!-- GIF отчет -->
+
                     <div class="dropdown">
                         <button class="btn btn-success btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
                             GIF отчет
@@ -257,7 +285,7 @@
                             </li>
                         </ul>
 
-                        <button class="btn btn-warning btn-sm" onclick="saveNodePositions()" title="Сохранить текущее расположение узлов">
+                        <button class="btn btn-warning btn-sm" onclick="saveNodePositions()" title="Сохранить текущее расположение и цвета узлов">
                             💾 Сохранить позиции
                         </button>
                     </div>
@@ -266,7 +294,6 @@
             </div>
         </div>
 
-        <!-- Сообщения и индикаторы -->
         <div id="uploadMessage" class="mb-2"></div>
 
         <div id="loadingIndicator" class="alert alert-info d-none mb-2" role="alert">
@@ -285,43 +312,52 @@
             <p class="mt-2 text-muted">Загрузка данных...</p>
         </div>
 
-        <!-- Контейнер диаграммы -->
         <div id="chartContainer" class="chart-container" style="visibility: hidden;">
             <div id="chartContent"></div>
         </div>
     </div>
 
-    <!-- Кнопка переключения координат -->
     <button id="toggleCoordsBtn" class="btn btn-primary" onclick="toggleCoordinates()" title="Показать координаты узлов">
         📍
     </button>
 
-    <!-- Блок отображения координат -->
     <div id="coordinatesDisplay">
         <div class="coord-title">
-            <span>📍 Координаты узлов</span>
+            <span>📍 Координаты и цвета узлов</span>
             <button class="close-btn" onclick="closeCoordinates()" title="Закрыть">✕</button>
         </div>
         <div id="coordinatesList"></div>
-        <div class="coord-status" id="coordStatus">Перетащите узел для обновления</div>
+        <div class="coord-status" id="coordStatus">Перетащите узел или измените цвет</div>
     </div>
 
     <script>
-        // Переменные состояния
+        // ============================================================
+        //  ГЛОБАЛЬНОЕ СОСТОЯНИЕ
+        // ============================================================
         let currentZoneType = '{{ zone_types[0] if zone_types else "main" }}';
         let refreshTimer = null;
         let isAutoRefreshEnabled = true;
         let showCoords = false;
         let lastNodePositions = {};
+        let pendingColors = {};        // {label: '#rrggbb'} — несохранённые цвета
+        let serverColors = {};         // цвета, полученные с сервера
+        let colorPickerOpenFor = null; // label узла, для которого открыта палитра
         let graphDivInstance = null;
 
-        // Функция переключения типа зоны
+        // ============================================================
+        //  ПЕРЕКЛЮЧЕНИЕ ЗОНЫ
+        // ============================================================
         function switchZoneType(type) {
             currentZoneType = type;
+            pendingColors = {};
+            serverColors = {};
+            colorPickerOpenFor = null;
             loadSankeyData(true);
         }
 
-        // --- Функции автообновления ---
+        // ============================================================
+        //  АВТООБНОВЛЕНИЕ
+        // ============================================================
         function toggleAutoRefresh() {
             isAutoRefreshEnabled = document.getElementById('autoRefreshSwitch').checked;
             if (isAutoRefreshEnabled) {
@@ -356,10 +392,23 @@
             }
         }
 
-        // --- Вспомогательные функции ---
+        function disableAutoRefresh(reason) {
+            const sw = document.getElementById('autoRefreshSwitch');
+            const wasChecked = sw && sw.checked;
+            isAutoRefreshEnabled = false;
+            if (sw) sw.checked = false;
+            stopAutoRefresh();
+            if (wasChecked) {
+                showMessage(`Автообновление отключено: ${reason}`, 'info');
+            }
+        }
+
+        // ============================================================
+        //  ВСПОМОГАТЕЛЬНЫЕ
+        // ============================================================
         function updateTitle(dateString) {
             const formattedDate = dateString ? formatDate(dateString) : '{{ default_date }}';
-            document.getElementById('topMessage').textContent = 
+            document.getElementById('topMessage').textContent =
                 `Диаграмма потоков ${currentZoneType} ${formattedDate}`;
         }
 
@@ -367,15 +416,13 @@
             if (!dateString) return '{{ default_date }}';
             const date = new Date(dateString);
             return date.toLocaleDateString('ru-RU', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
+                year: 'numeric', month: '2-digit', day: '2-digit'
             });
         }
 
         function showMessage(msg, type) {
             const div = document.getElementById('uploadMessage');
-            const alertClass = type === 'error' ? 'alert-danger' : 
+            const alertClass = type === 'error' ? 'alert-danger' :
                               type === 'info' ? 'alert-info' : 'alert-success';
             div.innerHTML = `
                 <div class="alert ${alertClass} alert-dismissible fade show small" role="alert">
@@ -396,12 +443,14 @@
             document.getElementById('loadingSpinner').style.display = 'none';
         }
 
-        // --- Функции для работы с координатами ---
+        // ============================================================
+        //  ПАНЕЛЬ КООРДИНАТ
+        // ============================================================
         function toggleCoordinates() {
             showCoords = !showCoords;
             const display = document.getElementById('coordinatesDisplay');
             const btn = document.getElementById('toggleCoordsBtn');
-            
+
             if (showCoords) {
                 display.classList.add('show');
                 btn.classList.add('show');
@@ -414,18 +463,20 @@
 
         function closeCoordinates() {
             showCoords = false;
+            colorPickerOpenFor = null;
             document.getElementById('coordinatesDisplay').classList.remove('show');
             document.getElementById('toggleCoordsBtn').classList.add('show');
         }
 
+        // ============================================================
+        //  ЧТЕНИЕ ДАННЫХ ИЗ PLOTLY
+        // ============================================================
         function getNodeCoordinates(graphDiv) {
             try {
-                // Пытаемся получить координаты из layout или data
                 const sources = [
                     graphDiv?.layout?.sankey?.node,
                     graphDiv?.data?.[0]?.node
                 ];
-                
                 for (const source of sources) {
                     if (source?.x && source?.y) {
                         const labels = source.label || [];
@@ -444,33 +495,96 @@
             }
         }
 
+        function getNodeColors(graphDiv) {
+            try {
+                const sources = [
+                    graphDiv?.layout?.sankey?.node,
+                    graphDiv?.data?.[0]?.node
+                ];
+                for (const src of sources) {
+                    if (src?.color) {
+                        if (typeof src.color === 'string') return [];
+                        return src.color;
+                    }
+                }
+            } catch (e) { /* ignore */ }
+            return [];
+        }
+
+        /**
+         * Получить массив цветов линий (link.color) — плоский массив длиной = число связей.
+         * Возвращает null, если цвет задан не как массив (например, одна строка).
+         */
+        function getLinkColors(graphDiv) {
+            try {
+                const src = graphDiv?.data?.[0];
+                const c = src?.link?.color;
+                if (!c) return null;
+                if (typeof c === 'string') return null;
+                return c.slice();
+            } catch (e) { return null; }
+        }
+
+        function getLinkSourceArray(graphDiv) {
+            try {
+                const src = graphDiv?.data?.[0];
+                const s = src?.link?.source;
+                if (!s) return [];
+                // бывает TypedArray — приводим к обычному массиву
+                return Array.from(s);
+            } catch (e) { return []; }
+        }
+
+        function readServerColorsFromGraph() {
+            const graphDiv = document.querySelector('.plotly-graph-div');
+            const result = {};
+            if (!graphDiv) return result;
+            try {
+                const positions = getNodeCoordinates(graphDiv);
+                const colors = getNodeColors(graphDiv);
+                positions.forEach((p, i) => {
+                    if (colors[i]) result[p.label] = colors[i];
+                });
+            } catch (e) { /* ignore */ }
+            return result;
+        }
+
+        // ============================================================
+        //  РЕНДЕР ПАНЕЛИ КООРДИНАТ
+        // ============================================================
         function updateCoordinates() {
             const graphDiv = document.querySelector('.plotly-graph-div');
             if (!graphDiv || typeof Plotly === 'undefined') {
-                document.getElementById('coordinatesList').innerHTML = 
+                document.getElementById('coordinatesList').innerHTML =
                     '<div class="text-muted small">График не загружен</div>';
                 return;
             }
 
             try {
                 const positions = getNodeCoordinates(graphDiv);
-                
+                const nodeColors = getNodeColors(graphDiv);
+
                 if (positions.length === 0) {
-                    document.getElementById('coordinatesList').innerHTML = 
+                    document.getElementById('coordinatesList').innerHTML =
                         '<div class="text-muted small">Нет данных об узлах. Перетащите узел.</div>';
                     document.getElementById('coordStatus').textContent = 'Ожидание данных...';
                     return;
                 }
-                
+
                 let html = '';
                 let hasChanges = false;
                 let changedNodes = [];
-                
+
                 positions.forEach(p => {
                     const key = `${p.label}_${p.index}`;
                     const roundedX = Math.round(p.x * 100) / 100;
                     const roundedY = Math.round(p.y * 100) / 100;
-                    
+
+                    const actualColor = nodeColors[p.index] || '#888888';
+                    const currentColor = pendingColors[p.label]
+                        || serverColors[p.label]
+                        || actualColor;
+
                     let isChanged = false;
                     if (lastNodePositions[key]) {
                         const lastX = Math.round(lastNodePositions[key].x * 100) / 100;
@@ -481,43 +595,177 @@
                             changedNodes.push(p.label);
                         }
                     }
-                    
                     lastNodePositions[key] = { x: p.x, y: p.y };
-                    
+
+                    const pickerOpen = colorPickerOpenFor === p.label;
+                    const pickerHtml = pickerOpen
+                        ? `<div class="color-picker-row">
+                               <input type="color" value="${currentColor}"
+                                      oninput="onColorInput(${p.index}, this.value)"
+                                      onchange="onColorChange(${p.index}, this.value)">
+                               <span class="picker-hint">выбирайте цвет, палитра не закроется</span>
+                               <button class="close-btn" style="font-size:14px; margin-left:4px;"
+                                       onclick="closeColorPicker()" title="Закрыть палитру">✕</button>
+                           </div>`
+                        : '';
+
+                    const safeLabel = String(p.label)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;');
+
                     html += `
                         <div class="coord-item">
-                            <span class="coord-label" title="${p.label}">${p.label}</span>
-                            <span class="coord-value ${isChanged ? 'coord-changed' : ''}">
-                                (${roundedX.toFixed(2)}, ${roundedY.toFixed(2)})${isChanged ? ' ✦' : ''}
-                            </span>
+                            <div class="coord-row">
+                                <span class="coord-label" data-node-index="${p.index}"
+                                      title="Кликните для выбора цвета"
+                                      onclick="openColorPickerByIndex(${p.index})">
+                                    <span class="coord-color-dot" data-dot-index="${p.index}"
+                                          style="background:${currentColor};"></span>
+                                    ${safeLabel}
+                                </span>
+                                <span class="coord-value ${isChanged ? 'coord-changed' : ''}">
+                                    (${roundedX.toFixed(2)}, ${roundedY.toFixed(2)})${isChanged ? ' ✦' : ''}
+                                </span>
+                            </div>
+                            ${pickerHtml}
                         </div>
                     `;
                 });
-                
+
                 document.getElementById('coordinatesList').innerHTML = html;
-                
+
                 if (hasChanges && changedNodes.length > 0) {
-                    document.getElementById('coordStatus').textContent = 
+                    document.getElementById('coordStatus').textContent =
                         `🔄 Перемещены: ${changedNodes.join(', ')}`;
                     document.getElementById('coordStatus').style.color = '#ffd54f';
                 } else {
-                    document.getElementById('coordStatus').textContent = 
-                        `✓ ${positions.length} узлов. Перетащите узел для обновления`;
-                    document.getElementById('coordStatus').style.color = '#aaa';
+                    const changedColors = Object.keys(pendingColors).length;
+                    document.getElementById('coordStatus').textContent =
+                        changedColors > 0
+                            ? `🎨 Изменено цветов: ${changedColors}. Не забудьте сохранить`
+                            : `✓ ${positions.length} узлов. Клик по имени — смена цвета`;
+                    document.getElementById('coordStatus').style.color =
+                        changedColors > 0 ? '#ffd54f' : '#aaa';
                 }
-                
             } catch (e) {
                 console.warn('Ошибка при обновлении координат:', e);
-                document.getElementById('coordinatesList').innerHTML = 
+                document.getElementById('coordinatesList').innerHTML =
                     '<div class="text-danger small">Ошибка получения координат</div>';
             }
         }
 
+        // ============================================================
+        //  РАБОТА С ЦВЕТОМ
+        // ============================================================
+        function openColorPickerByIndex(index) {
+            const graphDiv = document.querySelector('.plotly-graph-div');
+            if (!graphDiv) return;
+            const positions = getNodeCoordinates(graphDiv);
+            const node = positions.find(p => p.index === index);
+            if (!node) return;
+            // toggle: если открыта для этого узла — оставляем (пользователь мог повторно кликнуть);
+            // если для другого — переключаем на новый
+            colorPickerOpenFor = node.label;
+            updateCoordinates();
+        }
+
+        function closeColorPicker() {
+            colorPickerOpenFor = null;
+            updateCoordinates();
+        }
+
+        function onColorInput(index, color) {
+            // предпросмотр без сохранения: узел + исходящие линии + точка в панели
+            applyNodeColorByIndex(index, color, /*persist=*/false);
+            const dot = document.querySelector(`.coord-color-dot[data-dot-index="${index}"]`);
+            if (dot) dot.style.background = color;
+        }
+
+        function onColorChange(index, color) {
+            const graphDiv = document.querySelector('.plotly-graph-div');
+            if (!graphDiv) return;
+            const positions = getNodeCoordinates(graphDiv);
+            const node = positions.find(p => p.index === index);
+            if (!node) return;
+
+            // фиксируем выбранный цвет как pending
+            pendingColors[node.label] = color;
+
+            // применяем окончательно (узел + линии)
+            applyNodeColorByIndex(index, color, /*persist=*/true);
+
+            // ВАЖНО: палитру НЕ закрываем — пользователь может подбирать цвет многократно
+            // (закрытие — только по кнопке ✕)
+
+            // автообновление отключаем (однократно — disableAutoRefresh сам покажет сообщение)
+            disableAutoRefresh('изменён цвет узла');
+
+            // обновляем панель (точки, статус)
+            updateCoordinates();
+        }
+
+        /**
+         * Перекрашивает узел (node.color[index]) и все исходящие от него линии
+         * (link.color для связей с source === index).
+         *
+         * @param {number} index — индекс узла
+         * @param {string} color — '#rrggbb'
+         */
+        function applyNodeColorByIndex(index, color) {
+            const graphDiv = document.querySelector('.plotly-graph-div');
+            if (!graphDiv || typeof Plotly === 'undefined') return;
+
+            try {
+                const positions = getNodeCoordinates(graphDiv);
+                const nodeCount = positions.length;
+
+                // 1) цвета узлов
+                const nodeColors = getNodeColors(graphDiv).slice();
+                while (nodeColors.length < nodeCount) nodeColors.push('#888888');
+                nodeColors[index] = color;
+
+                // 2) цвета линий — перекрашиваем только исходящие от index
+                const sources = getLinkSourceArray(graphDiv);
+                let linkColors = getLinkColors(graphDiv);
+
+                if (linkColors && linkColors.length === sources.length) {
+                    // копия, чтобы не мутировать исходный массив
+                    linkColors = linkColors.slice();
+                    for (let i = 0; i < sources.length; i++) {
+                        if (sources[i] === index) {
+                            linkColors[i] = color;
+                        }
+                    }
+                } else {
+                    // если link.color не задан как массив — сформируем массив
+                    // на основе текущих цветов узлов-источников
+                    const fallbackNodeColors = nodeColors;
+                    linkColors = sources.map(srcIdx => {
+                        return (srcIdx === index)
+                            ? color
+                            : (fallbackNodeColors[srcIdx] || '#cccccc');
+                    });
+                }
+
+                Plotly.restyle(graphDiv, {
+                    'node.color': [nodeColors],
+                    'link.color': [linkColors]
+                }, [0]);
+
+            } catch (e) {
+                console.warn('Не удалось применить цвет:', e);
+            }
+        }
+
+        // ============================================================
+        //  PLOTLY ОБРАБОТЧИКИ
+        // ============================================================
         function setupNodeDragHandler(graphDiv) {
             if (!graphDiv) return;
             graphDivInstance = graphDiv;
-            
-            // Удаляем старые обработчики
+
             const handlers = ['_sankeyDragHandler', '_sankeyAfterPlotHandler', '_sankeyHoverHandler'];
             handlers.forEach(name => {
                 if (graphDiv[name]) {
@@ -528,40 +776,42 @@
                     );
                 }
             });
-            
-            // Обработчик перемещения
+
             graphDiv._sankeyDragHandler = function(eventData) {
                 if (eventData && eventData['sankey.node.x'] !== undefined) {
+                    disableAutoRefresh('перемещён узел');
                     setTimeout(() => {
-                        if (showCoords) {
-                            updateCoordinates();
-                            showMessage('Узел перемещен. Координаты обновлены.', 'info');
-                        }
+                        if (showCoords) updateCoordinates();
                     }, 100);
                 }
             };
             graphDiv.on('plotly_relayout', graphDiv._sankeyDragHandler);
-            
-            // Обработчик после рендеринга
+
             graphDiv._sankeyAfterPlotHandler = function() {
-                if (showCoords) setTimeout(updateCoordinates, 150);
+                // Если открыта палитра — не перерисовываем панель,
+                // иначе input[type=color] потеряет фокус при relayout/restyle
+                if (showCoords && !colorPickerOpenFor) {
+                    setTimeout(updateCoordinates, 150);
+                }
             };
             graphDiv.on('plotly_afterplot', graphDiv._sankeyAfterPlotHandler);
-            
-            // Обработчик наведения
+
             graphDiv._sankeyHoverHandler = function() {
-                if (showCoords) setTimeout(updateCoordinates, 50);
+                if (showCoords && !colorPickerOpenFor) {
+                    setTimeout(updateCoordinates, 50);
+                }
             };
             graphDiv.on('plotly_hover', graphDiv._sankeyHoverHandler);
         }
 
-        // --- Основная функция загрузки данных ---
+        // ============================================================
+        //  ЗАГРУЗКА ДАННЫХ
+        // ============================================================
         function loadSankeyData(showIndicator = true) {
             const date = document.getElementById('analysisDate').value;
             const zoneType = currentZoneType;
 
             updateTitle(date);
-
             if (showIndicator) showLoading();
 
             $('#chartContainer').css('visibility', 'hidden');
@@ -572,9 +822,11 @@
                 success: function(data) {
                     $('#chartContent').html(data);
                     if (showIndicator) hideLoading();
-                    
+
                     lastNodePositions = {};
-                    
+                    pendingColors = {};
+                    colorPickerOpenFor = null;
+
                     requestAnimationFrame(function() {
                         setTimeout(function() {
                             const graphDiv = document.querySelector('.plotly-graph-div');
@@ -582,7 +834,10 @@
                                 Plotly.relayout(graphDiv, { autosize: true, height: undefined });
                                 Plotly.Plots.resize(graphDiv);
                                 setupNodeDragHandler(graphDiv);
-                                
+
+                                // цвета, встроенные сервером в диаграмму
+                                serverColors = readServerColorsFromGraph();
+
                                 setTimeout(() => {
                                     if (showCoords) updateCoordinates();
                                     requestAnimationFrame(() => {
@@ -608,19 +863,80 @@
             });
         }
 
-        // --- Функция для GIF ---
+        // ============================================================
+        //  GIF
+        // ============================================================
         function downloadGif() {
             const date = document.getElementById('analysisDate').value;
             const zoneType = currentZoneType;
             const interval = document.getElementById('gifInterval').value;
             const duration = document.getElementById('gifDuration').value;
             const url = `/sankey-gif?date=${date}&zone_type=${zoneType}&interval_minutes=${interval}&duration=${duration}&max_frames=24`;
-            
+
             showMessage('Генерация GIF началась. Файл будет скачан автоматически', 'success');
             window.open(url, '_blank');
         }
 
-        // --- Инициализация ---
+        // ============================================================
+        //  СОХРАНЕНИЕ ПОЗИЦИЙ И ЦВЕТОВ
+        // ============================================================
+        function saveNodePositions() {
+            const graphDiv = document.querySelector('.plotly-graph-div');
+            if (!graphDiv || typeof Plotly === 'undefined') {
+                showMessage('График не загружен', 'error');
+                return;
+            }
+
+            try {
+                const positions = getNodeCoordinates(graphDiv);
+                if (positions.length === 0) {
+                    showMessage('Нет данных об узлах для сохранения', 'error');
+                    return;
+                }
+
+                const actualColors = getNodeColors(graphDiv);
+                const positionData = {};
+                positions.forEach((p, i) => {
+                    const color = pendingColors[p.label]
+                        || serverColors[p.label]
+                        || actualColors[i]
+                        || '#888888';
+                    positionData[p.label] = {
+                        x: Math.round(p.x * 100) / 100,
+                        y: Math.round(p.y * 100) / 100,
+                        color: color
+                    };
+                });
+
+                const zoneType = currentZoneType;
+                $.ajax({
+                    url: `/sankey-save-positions?zone_type=${encodeURIComponent(zoneType)}`,
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(positionData),
+                    success: function(response) {
+                        if (response.success) {
+                            serverColors = Object.assign({}, serverColors, pendingColors);
+                            pendingColors = {};
+                            showMessage(`✅ Позиции и цвета для '${zoneType}' сохранены!`, 'success');
+                            if (showCoords) updateCoordinates();
+                        } else {
+                            showMessage('❌ Ошибка сохранения: ' + (response.error || 'Неизвестная ошибка'), 'error');
+                        }
+                    },
+                    error: function(xhr) {
+                        showMessage('❌ Ошибка при сохранении: ' + xhr.responseText, 'error');
+                    }
+                });
+            } catch (e) {
+                console.error('Ошибка сохранения позиций:', e);
+                showMessage('❌ Ошибка: ' + e.message, 'error');
+            }
+        }
+
+        // ============================================================
+        //  ИНИЦИАЛИЗАЦИЯ
+        // ============================================================
         $(document).ready(function() {
             const zoneTypes = {{ zone_types|tojson }};
             if (zoneTypes && zoneTypes.length > 0) {
@@ -628,37 +944,34 @@
                 document.getElementById('selectedZone').textContent = zoneTypes[0];
             }
 
-            // Настройка обработчиков
             document.getElementById('autoRefreshSwitch').addEventListener('change', toggleAutoRefresh);
             document.getElementById('refreshInterval').addEventListener('change', onRefreshIntervalChange);
             document.getElementById('analysisDate').addEventListener('change', function() {
                 loadSankeyData(true);
             });
 
-            // Загрузка данных
             loadSankeyData(true);
-            
-            // Запуск автообновления
+
             if (document.getElementById('autoRefreshSwitch').checked) {
                 startAutoRefresh();
             }
 
-            // Показываем кнопку координат
             setTimeout(() => {
                 document.getElementById('toggleCoordsBtn').classList.add('show');
             }, 1000);
 
-            // Обновление координат при ресайзе
             let resizeTimeout;
             window.addEventListener('resize', function() {
                 clearTimeout(resizeTimeout);
                 resizeTimeout = setTimeout(() => {
-                    if (showCoords) updateCoordinates();
+                    if (showCoords && !colorPickerOpenFor) updateCoordinates();
                 }, 500);
             });
         });
 
-        // Очистка при закрытии
+        // ============================================================
+        //  ОЧИСТКА
+        // ============================================================
         window.addEventListener('beforeunload', function() {
             stopAutoRefresh();
             if (graphDivInstance) {
@@ -673,61 +986,6 @@
                 });
             }
         });
-
-
-        // Ф-ия обновления положения зон
-        function saveNodePositions() {
-            const graphDiv = document.querySelector('.plotly-graph-div');
-            if (!graphDiv || typeof Plotly === 'undefined') {
-                showMessage('График не загружен', 'error');
-                return;
-            }
-
-            try {
-        // Получаем текущие позиции узлов
-        const positions = getNodeCoordinates(graphDiv);
-        
-        if (positions.length === 0) {
-            showMessage('Нет данных об узлах для сохранения', 'error');
-            return;
-        }
-
-        // Формируем данные для отправки
-        const positionData = {};
-        positions.forEach(p => {
-            positionData[p.label] = {
-                x: Math.round(p.x * 100) / 100,
-                y: Math.round(p.y * 100) / 100
-            };
-        });
-
-        // Отправляем на сервер с указанием zone_type
-        const zoneType = currentZoneType;
-        $.ajax({
-            url: `/sankey-save-positions?zone_type=${encodeURIComponent(zoneType)}`,
-            method: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify(positionData),
-            success: function(response) {
-                if (response.success) {
-                    showMessage(`✅ Позиции для группы '${zoneType}' сохранены!`, 'success');
-                    if (showCoords) updateCoordinates();
-                } else {
-                    showMessage('❌ Ошибка сохранения: ' + (response.error || 'Неизвестная ошибка'), 'error');
-                }
-            },
-            error: function(xhr) {
-                showMessage('❌ Ошибка при сохранении: ' + xhr.responseText, 'error');
-            }
-        });
-    } catch (e) {
-        console.error('Ошибка сохранения позиций:', e);
-        showMessage('❌ Ошибка: ' + e.message, 'error');
-    }
-}
-
-
-
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
