@@ -30,7 +30,7 @@ ZONE_POSITIONS = {
     'M500. Приемка на СГП (MADU)': {'x': 0.95, 'y': 0.3, 'color': '#FFEAA7'},
     'M483. Чистые автомобили': {'x': 0.95, 'y': 0.5, 'color': '#FFEAA7'},
     'M412. Ретрофит Телематика': {'x': 0.9, 'y': 0.1, 'color': '#FFEAA7'},
-    'calibration': {'x': -0.1, 'y': 0.5, 'color': 'rgba(0,0,0,0)'}, 
+    'calibration': {'x': -0.1, 'y': 0.5, 'color': '#FFFFF0'}, 
 }
 
 
@@ -51,9 +51,14 @@ class SankeyService:
         self._psql_session.close()
 
     def get_zone_attributes(self, group_name):
-        zone_attrubites = self._movement_repo.get_zone_attributes(group_name)
-        
+        zone_attrubites = self._movement_repo.get_zone_attributes(group_name)       
         return
+
+
+    def save_colors_positions(self, zone_type, positions):
+        sucsess, saved = self._movement_repo.save_color_positions_db(zone_type, positions)
+        return sucsess, saved
+     
     
 
 def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dict:

@@ -46,8 +46,8 @@ class ZoneWithGroup(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
-    x = Column(Float, nullable=False)
-    y = Column(Float, nullable=False)
+    x = Column(Float, nullable=True)
+    y = Column(Float, nullable=True)
     color = Column(String, nullable=True)
     order = Column(Integer, default=0)
     report_id = Column(Integer, ForeignKey("report_zones.id", ondelete='CASCADE', name="fk_zone_report_id"), nullable=False)

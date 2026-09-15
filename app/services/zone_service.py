@@ -43,6 +43,13 @@ class ZoneService:
             )
         return result
 
+    def save_zone_report(self, group_name: str, zones: List[str]) -> bool:
+        result = self._movement_repo.save_zone_report_to_db(
+            group_name, zones
+            )
+        return result
+    
+
     def delete_dash_group(self, group_name: str) -> bool:
         return self._movement_repo.delete_dash_group_from_db(group_name)
 

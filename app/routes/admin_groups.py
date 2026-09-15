@@ -168,11 +168,13 @@ async def create_group(request: GroupCreateRequest):
         if not request.zones:            
             raise HTTPException(status_code=400, detail="Выберите хотя бы одну зону")
                 
-        success = zone_service.save_dash_group(request.group_name.strip(), request.zones)
+        #success = zone_service.save_dash_group(request.group_name.strip(), request.zones)
+        success = zone_service.save_zone_report(request.group_name.strip(), request.zones)
         if success:
             return {"status": "success", "message": f"Группа '{request.group_name}' успешно сохранена"}
         else:
             raise HTTPException(status_code=500, detail="Ошибка при сохранении группы")
+
     except HTTPException:
         raise
     except Exception as e:
