@@ -37,7 +37,7 @@ class ZoneReport(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(Text, nullable=False)
-    report_zones = relationship("ZoneWithGroup", back_populates="report", cascade="all, delete-orphan")
+    report_zones = relationship("ZoneWithGroup", back_populates="report", cascade="all")
 
 
 class ZoneWithGroup(Base):
@@ -46,11 +46,11 @@ class ZoneWithGroup(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
-    x = Column(Float, nullable=False)
-    y = Column(Float, nullable=False)
+    x = Column(Float, nullable=True)
+    y = Column(Float, nullable=True)
     color = Column(String, nullable=True)
     order = Column(Integer, default=0)
-    report_id = Column(Integer, ForeignKey("report_zones.id", ondelete='CASCADE', name="fk_zone_report_id"), nullable=False)
+    report_id = Column(Integer, ForeignKey("report_zones.id", ondelete='SET NULL', name="fk_zone_report_id"), nullable=True)
     report = relationship("ZoneReport", back_populates="report_zones")
     
     # Ссылка на родительскую зону (может быть NULL)

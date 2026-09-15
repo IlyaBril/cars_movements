@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 ENABLE_CALIBRATION = True
 
-ZONE_POSITIONS = {
+ZONES_POSITIONS = {
     'M150. Выход с линии DKD Off': {'x': 0.01, 'y': 0.3, 'color': '#FFEAA7'},
     'M151. Выход с линии DKD+': {'x': 0.01, 'y': 0.8, 'color': '#FFEAA7'},
     'БелЗона_FORI': {'x': 0.1, 'y': 0.7, 'color': '#FFEAA7'},
@@ -30,7 +30,7 @@ ZONE_POSITIONS = {
     'M500. Приемка на СГП (MADU)': {'x': 0.95, 'y': 0.3, 'color': '#FFEAA7'},
     'M483. Чистые автомобили': {'x': 0.95, 'y': 0.5, 'color': '#FFEAA7'},
     'M412. Ретрофит Телематика': {'x': 0.9, 'y': 0.1, 'color': '#FFEAA7'},
-    'calibration': {'x': -0.1, 'y': 0.5, 'color': 'rgba(0,0,0,0)'}, 
+    'calibration': {'x': -0.1, 'y': 0.5, 'color': '#FFFFF0'}, 
 }
 
 
@@ -51,91 +51,147 @@ class SankeyService:
         self._psql_session.close()
 
     def get_zone_attributes(self, group_name):
-        zone_attrubites = self._movement_repo.get_zone_attributes(group_name)
-        
-        return
+        zone_attributes = self._movement_repo.get_zone_attributes(group_name)       
+        return zone_attributes
+
+
+    def save_colors_positions(self, zone_type, positions):
+        positions = {
+            label.split('<br>', 1)[0].strip(): item
+            for label, item in positions.items()
+            }
+     
+        sucsess, saved = self._movement_repo.save_color_positions_db(zone_type, positions)
+        return sucsess, saved
+     
     
 
 def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dict:
     """
-
+    df - таблица, фильтрованная по условию: если есть движение VIN в этот день,
+    выгружаем все движения по этому VIN за все дни.
+    allowed_zones - Точки регистрации, для которых нужно построить sankey диаграмму
     """
-    	
     # Фильтрация по дате отчета
-    target_date = pd.Timestamp(date).date()	
-    
-    #if df_filtered.empty:
-    #    return {'nodes': [], 'links': [], 'message': 'Нет данных'}
-    
-    # Подготовка DataFrame для подсчета входа и выхода
-    # Вход в Точку регистрации происходит во время регистрации этой точки
-    # Выход из Точки регистрации происходит во время регистрации следующей точки
+    target_date = pd.Timestamp(date).date()
 
-    df_enter = df[df['Дата'].dt.date == target_date].copy()
-    df_exit = df[df['exit_time'].dt.date == target_date].copy()
-      
-    # Подсчет количества переходов между точками за день
+    # Подготовка DataFrame для подсчета входа и выхода.
+    # Вход в Точку регистрации происходит во время регистрации этой точки,
+    # выход — во время регистрации следующей точки.
+    df_enter = df[df['Дата'].dt.date == target_date]
+    df_exit = df[df['exit_time'].dt.date == target_date]
+
+    # Подсчет количества переходов между точками за день.
     # Фильтрация происходит по df_exit, т.к. выход из текущей точки в следующую
-    # происходит во время входа в следующую точку
- 
-    df_transitions = df_exit.sort_values(['Заказ', 'exit_time'])
-    transition_counts = (df_transitions
-                        .groupby(['Точка регистрации', 'next_zone'])
-                        .size()
-                        .reset_index(name='count'))
-    
-    # Получаем все уникальные зоны в виде: 
-    # Точка регистрации next_zone  count
+    # происходит во время входа в следующую точку.
+    # Точка регистрации  next_zone   count
     # Москва             Питер       2
     # Москва             Казань      1
     # Питер              Москва      1
-    
-    all_zones = pd.concat([
-        transition_counts['Точка регистрации'], 
-        transition_counts['next_zone']
-    ]).unique()
-	
-    logger.info(f'{__name__} all zones {all_zones}')
-    
-    # Считаем входы и выходы с помощью groupby
-    # Получаем словарь типа {'Москва': 2, 'Питер': 2, 'Казань': 1}
 
-    out_stats = (df_exit['Точка регистрации']
-                .value_counts()
-                .to_dict())
-    
-    in_stats = (df_enter['Точка регистрации']
-               .value_counts()
-               .to_dict())
-    
+    transition_counts = (df_exit
+                         .sort_values(['Заказ', 'exit_time'])
+                         .groupby(['Точка регистрации', 'next_zone'])
+                         .size()
+                         .reset_index(name='count'))
+
+    # Считаем входы и выходы: {'Москва': 2, 'Питер': 2, 'Казань': 1}
+    out_stats = df_exit['Точка регистрации'].value_counts().to_dict()
+    in_stats = df_enter['Точка регистрации'].value_counts().to_dict()
     logger.info(f'{__name__} in_stats {in_stats} \n out_stats {out_stats}')
-    allowed_zones = list(set(allowed_zones) & set(all_zones))
-    # 8. Создаем узлы
-    nodes = []
-    node_to_index = {}
-    
-    for i, zone in enumerate(sorted(allowed_zones)):
-        stats_in = in_stats.get(zone, 0)
-        stats_out = out_stats.get(zone, 0)
-        label = f"{zone}<br> (вх:{stats_in}, вых:{stats_out})"
-        nodes.append(label)
-        node_to_index[zone] = i
-    
-    logger.info(f'{__name__}  \n  >>> nodes {nodes} \n >>> node_to_index {node_to_index}')
-    
-	# 9. Создаем связи
-    links = []
+
+    # Получаем все уникальные зоны
+    all_zones = set(transition_counts['Точка регистрации']) | set(transition_counts['next_zone'])
+    zone_names = sorted(set(allowed_zones) & all_zones)
+
+
+    # Чистые имена зон (для позиций/цветов) + индексы
+    node_to_index = {zone: i for i, zone in enumerate(zone_names)}
+
+    # Метки с статистикой — то, что идёт в node.label
+    node_labels = [
+        f"{zone}<br> (вх:{in_stats.get(zone, 0)}, вых:{out_stats.get(zone, 0)})"
+        for zone in zone_names
+    ]
+
+    # Сразу собираем плоские списки для go.Sankey.link
+    sources, targets, values = [], [], []
     for _, row in transition_counts.iterrows():
-        source = row['Точка регистрации']
-        target = row['next_zone']
-        if (source in allowed_zones and target in allowed_zones and source in node_to_index and target in node_to_index):
-            links.append({
-            'source': node_to_index[source],
-            'target': node_to_index[target],
-            'value': row['count']
-        })
-    logger.info(f'{__name__} links {links}')
-    return {'nodes': nodes, 'links': links, 'message': None}
+        src, dst = row['Точка регистрации'], row['next_zone']
+        if src in node_to_index and dst in node_to_index:
+            sources.append(node_to_index[src])
+            targets.append(node_to_index[dst])
+            values.append(row['count'])
+
+    logger.info(f'{__name__} sources {sources} targets {targets} values {values}')
+
+    sankey_data = {
+        'zone_names':  zone_names,
+        'node_labels': node_labels,
+        'sources':     sources,
+        'targets':     targets,
+        'values':      values,
+        'message':     None,
+    }
+    # ============ КАЛИБРОВКА ============
+    if ENABLE_CALIBRATION:
+        sankey_data = add_calibration_node(sankey_data, calibration_value=500)
+    # ====================================
+
+    return sankey_data
+
+def get_positions_colors(zone_names):
+    # Определяем позиции и цвета для каждой зоны
+    node_positions = []
+    node_colors = []
+    
+    for zone_name in zone_names:
+        if zone_name in ZONE_POSITIONS:
+            pos = ZONE_POSITIONS[zone_name]
+            node_positions.append([pos['x'], pos['y']])
+            node_colors.append(pos['color'])
+            logger.info(f"Зона '{zone_name}' positions x {pos['x']} y {pos['y']}")
+        else:
+            # Если зона не найдена в словаре, используем случайные координаты и цвет
+            logger.warning(f"Зона '{zone_name}' не найдена в ZONE_POSITIONS, используются случайные координаты")
+            node_positions.append([random.uniform(0.1, 0.9), random.uniform(0.1, 0.9)])
+            node_colors.append(f'rgba({random.randint(100,200)}, {random.randint(100,200)}, {random.randint(100,200)}, 0.8)')
+
+    return node_positions, node_colors
+
+
+def get_positions_colors_from_obj(zone_names, zone_type):
+    service = SankeyService()
+    node_positions = []
+    node_colors = []
+
+    with service:
+        report = service.get_zone_attributes(zone_type)
+        zones_by_name = {z.name: z for z in report.report_zones}
+        logger.info(f'{__name__} zones_by_name {zones_by_name} \n zone_names {zone_names}')
+        for zone_name in zone_names:
+            zone = zones_by_name.get(zone_name)
+
+            if zone is not None and zone.x is not None and zone.y is not None:
+                node_positions.append([zone.x, zone.y])
+                node_colors.append(zone.color)
+                logger.info(f"Зона '{zone_name}' positions x {zone.x} y {zone.y}")
+            else:
+                logger.warning(
+                    f"Зона '{zone_name}' не найдена в отчёте или без координат, "
+                    f"используются случайные координаты"
+                )
+                node_positions.append([
+                    random.uniform(0.1, 0.9),
+                    random.uniform(0.1, 0.9),
+                ])
+                node_colors.append(
+                    f'rgba({random.randint(100, 200)}, '
+                    f'{random.randint(100, 200)}, '
+                    f'{random.randint(100, 200)}, 0.8)'
+                )
+
+    return node_positions, node_colors
 
 
 def get_link_colors(sources: list, node_colors: list, opacity: float = 0.4) -> list:
@@ -182,51 +238,31 @@ def get_link_colors(sources: list, node_colors: list, opacity: float = 0.4) -> l
 # ============ НОВАЯ ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ КАЛИБРОВКИ ============
 def add_calibration_node(sankey_data: dict, calibration_value: int = 400) -> dict:
     """
-    Добавляет калибровочный узел и связь для фиксации масштаба диаграммы
+    Добавляет калибровочный узел и связь для фиксации масштаба диаграммы.
     
-    Args:
-        sankey_data: словарь с данными {'nodes': [...], 'links': [...]}
-        calibration_value: фиксированное значение для калибровки (по умолчанию 300)
-    
-    Returns:
-        dict: обновленный словарь с добавленным калибровочным узлом и связью
     """
-    if not sankey_data['nodes'] or not sankey_data['links']:
+    if not sankey_data['values']:
         return sankey_data
 
-    logger.info(f'{__name__} sankey data {sankey_data}')
-    
-    # Создаем копию данных
+    logger.info(f'{__name__} before calibration: {sankey_data}')
+
     result = {
-        'nodes': sankey_data['nodes'].copy(),
-        'links': sankey_data['links'].copy(),
-        'message': sankey_data.get('message')
+        'zone_names':  ['calibration'] + sankey_data['zone_names'],
+        'node_labels': ['calibration'] + sankey_data['node_labels'],
+        # все существующие индексы сдвигаются на +1
+        'sources': [s + 1 for s in sankey_data['sources']],
+        'targets': [t + 1 for t in sankey_data['targets']],
+        'values':  list(sankey_data['values']),
+        'message': sankey_data.get('message'),
     }
-    
-    # Добавляем калибровочный узел как СТРОКУ (не словарь!)
-    result['nodes'].insert(0, "calibration")
-    
-    
-    # Обновляем индексы в связях (+1)
-    updated_links = []
-    for link in result['links']:
-        updated_links.append({
-            'source': link['source'] + 1,
-            'target': link['target'] + 1,
-            'value': link['value']
-        })
-    result['links'] = updated_links
-    
-    # Добавляем калибровочную связь
-    if len(result['nodes']) > 1:
-        calibration_link = {
-            'source': 0,
-            'target': 1,
-            'value': calibration_value,
-        }
-        result['links'].append(calibration_link)
-    logger.info(f'{__name__} result  {result}')
-    
+
+    # калибровочная связь: узел 0 -> узел 1 (первый реальный узел)
+    if len(result['zone_names']) > 1:
+        result['sources'].append(0)
+        result['targets'].append(1)
+        result['values'].append(calibration_value)
+
+    logger.info(f'{__name__} after calibration: {result}')
     return result
 # ================================================================
 
@@ -238,77 +274,37 @@ def create_sankey_chart(
     zone_type: str,
     ) -> go.Figure:
 
-    logger.info(f'{__name__} zone type {zone_type}')
-
     sankey_data = prepare_sankey_data(df, date, allowed_zones)
-    service = SankeyService()
-    with service:
-        attrs = service.get_zone_attributes(zone_type)
-
-    logger.info(f'{__name__} attrs {attrs}')
-
-
-# ============ ВЫЗОВ ФУНКЦИИ КАЛИБРОВКИ ============
-# Для ОТКЛЮЧЕНИЯ калибровки просто закомментируйте следующую строку
-# или замените на: sankey_data = sankey_data
-    if ENABLE_CALIBRATION:
-        sankey_data = add_calibration_node(sankey_data, calibration_value=500)
-# ===================================================
+    logger.info(f'{__name__} sankey_data {sankey_data}')
+    #{
+    #   'zone_names': zone_names,      # для get_positions_colors_from_obj
+    #   'node_labels': node_labels,    # для node.label
+    #   'sources': sources,            # для link.source
+    #   'targets': targets,            # для link.target
+    #   'values': values,              # для link.value
+    #   'message': None,
+    #}
     
-    
-    if not sankey_data['nodes'] or not sankey_data['links']:
+    # Пустая диаграмма, если нет связей
+    if not sankey_data['values']:
         fig = go.Figure()
         fig.update_layout(
-            title={
-                'text': f'Нет данных для отображения за {date}',
-                'y': 0.5,
-                'x': 0.5
-                },
-            height=400
-            )
+            title={'text': f'Нет данных для отображения за {date}', 'y': 0.5, 'x': 0.5},
+            height=400,
+        )
         return fig
 
-    node_labels = sankey_data['nodes']
-    sources, targets, values = [], [], []
-    
-    for link in sankey_data['links']:
-        sources.append(link['source'])
-        targets.append(link['target'])
-        values.append(link['value'])
-
-    
-
-    colors = [f'rgba({random.randint(100,200)}, {random.randint(100,200)}, {random.randint(100,200)}, 0.8)' for _ in node_labels]
-
-    zone_names = []
-
-    for label in node_labels:
-        # Извлекаем имя зоны из метки (до <br>)
-        zone_name = label.split('<br>')[0]
-        zone_names.append(zone_name)
+    zone_names  = sankey_data['zone_names']
+    node_labels = sankey_data['node_labels']
+    sources     = sankey_data['sources']
+    targets     = sankey_data['targets']
+    values      = sankey_data['values']
 
     # Определяем позиции и цвета для каждой зоны
-    node_positions = []
-    node_colors = []
-    
-    for zone_name in zone_names:
-        if zone_name in ZONE_POSITIONS:
-            pos = ZONE_POSITIONS[zone_name]
-            node_positions.append([pos['x'], pos['y']])
-            node_colors.append(pos['color'])
-            logger.info(f"Зона '{zone_name}' positions x {pos['x']} y {pos['y']}")
-        else:
-            # Если зона не найдена в словаре, используем случайные координаты и цвет
-            logger.warning(f"Зона '{zone_name}' не найдена в ZONE_POSITIONS, используются случайные координаты")
-            node_positions.append([random.uniform(0.1, 0.9), random.uniform(0.1, 0.9)])
-            node_colors.append(f'rgba({random.randint(100,200)}, {random.randint(100,200)}, {random.randint(100,200)}, 0.8)')
+    node_positions, node_colors = get_positions_colors_from_obj(zone_names, zone_type)
 
-
-# ============ ПОЛУЧАЕМ ЦВЕТА ДЛЯ СВЯЗЕЙ ============
+    # Цвета для связей
     link_colors = get_link_colors(sources, node_colors, opacity=0.4)
-# ====================================================
-
-
 
     fig = go.Figure(data=[go.Sankey(
         node=dict(
@@ -318,14 +314,14 @@ def create_sankey_chart(
             label=node_labels,
             color=node_colors,
             x=[pos[0] for pos in node_positions],
-            y=[pos[1] for pos in node_positions]
+            y=[pos[1] for pos in node_positions],
         ),
         link=dict(
             source=sources,
             target=targets,
             value=values,
             color=link_colors,
-            )
+        ),
     )])
 
     fig.update_layout(

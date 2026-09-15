@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from PIL import Image
 from app.services.data_service import DataService
-from app.services.sankey_service import ZONE_POSITIONS, ENABLE_CALIBRATION, add_calibration_node, get_link_colors
+from app.services.sankey_service import ENABLE_CALIBRATION, add_calibration_node, get_link_colors
 
 logger = logging.getLogger(__name__)
 

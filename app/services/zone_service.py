@@ -43,11 +43,15 @@ class ZoneService:
             )
         return result
 
+    def save_zone_report(self, group_name: str, zones: List[str]) -> bool:
+        result = self._movement_repo.save_zone_report_to_db(
+            group_name, zones
+            )
+        return result  
+
     def delete_dash_group(self, group_name: str) -> bool:
         return self._movement_repo.delete_dash_group_from_db(group_name)
 
-    
-    
     #Группировка зон
 
     def get_groups(self,
@@ -86,6 +90,14 @@ class ZoneService:
 
     def save_group_to_db(self, group_name: str, zones: List[str]) -> bool:
         result = self._group_repo.save_group_to_db(
+            group_name, zones
+            )
+        return result
+
+    def save_zones_group(self, group_name: str, zones: List[str]) -> bool:
+        """Сохранение группы модели ZoneWithGroup"""
+        
+        result = self._group_repo.save_zones_group_to_db(
             group_name, zones
             )
         return result

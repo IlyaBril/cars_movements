@@ -85,8 +85,10 @@ async def create_group(request: GroupCreateRequest):
                             status_code=400, 
                             detail=f"Зона '{zone}' уже используется в группе '{group_name}'"
                         )
-        
+        logger.info(f'{__name__} group {request.group_name.strip()} zones {request.zones}')
         success = zone_service.save_group_to_db(request.group_name.strip(), request.zones)
+        success = zone_service.save_zones_group(request.group_name.strip(), request.zones)
+        
         if success:
             return {"status": "success", "message": f"Группа '{request.group_name}' успешно сохранена"}
         else:
@@ -137,7 +139,7 @@ async def zones_page(request: Request):
 
 @router.get("/edit/zones/{group_name}")
 async def get_edit_zones_data(group_name: str):
-    """Данные для редактирования группы"""
+    """Подгузка данных перед редактированием группы"""
 
     dash_zones = zone_service.get_dash_zones()
     if group_name not in dash_zones:
@@ -159,7 +161,7 @@ async def get_edit_zones_data(group_name: str):
 
 @router.post("/zones/create")
 async def create_group(request: GroupCreateRequest):
-    """Создание или обновление группы"""
+    """Создание или обновление группы после редактирования"""
     
     try:
         if not request.group_name or not request.group_name.strip():
@@ -168,11 +170,13 @@ async def create_group(request: GroupCreateRequest):
         if not request.zones:            
             raise HTTPException(status_code=400, detail="Выберите хотя бы одну зону")
                 
-        success = zone_service.save_dash_group(request.group_name.strip(), request.zones)
+        #success = zone_service.save_dash_group(request.group_name.strip(), request.zones)
+        success = zone_service.save_zone_report(request.group_name.strip(), request.zones)
         if success:
             return {"status": "success", "message": f"Группа '{request.group_name}' успешно сохранена"}
         else:
             raise HTTPException(status_code=500, detail="Ошибка при сохранении группы")
+
     except HTTPException:
         raise
     except Exception as e:

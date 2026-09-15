@@ -5,13 +5,14 @@ import plotly.graph_objects as go
 import pandas as pd
 
 from datetime import datetime
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, Query, Body
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import FileResponse
 from app.services.gif_service import GifService
 from app.services.data_service import DataService
-from app.services.sankey_service import SankeyService, ZONE_POSITIONS, prepare_sankey_data, get_link_colors, add_calibration_node, create_sankey_chart
+from app.services.sankey_service import SankeyService, prepare_sankey_data, get_link_colors, add_calibration_node, create_sankey_chart
+from app.db.schemas import NodeLayoutItem, SavePositionsResponse
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +51,12 @@ async def get_sankey_chart(
         logger.info(f'{__name__} get sankey chart, data service done')
         with data_service:
             df = data_service.get_data(date)
-            logger.info(f'{__name__} get sankey chart, data service get data df {zone_type}')
+
+            
             zone_to_group, allowed_zones = data_service._prepare_zones_and_mapping(zone_type, df)
+            logger.info(f'{__name__} get sankey chart, \n'
+                        f'zone_to_group {zone_to_group} \n'
+                        f'allowed_zones {allowed_zones}')
             df = data_service._transform_dataframe(df, zone_to_group)
             if df.empty:
                 return HTMLResponse(content="<h3>Нет данных за выбранную дату</h3>")
@@ -73,6 +78,25 @@ async def get_sankey_chart(
     except Exception as e:
         logger.error(f"Ошибка создания Sankey диаграммы: {e}")
         return HTMLResponse(content=f"<h3>Ошибка: {str(e)}</h3>")
+
+
+@router.post("/sankey-save-positions", response_model=SavePositionsResponse)
+async def sankey_save_positions(
+    payload: dict[str, NodeLayoutItem] = Body(...),
+    zone_type: str = Query(...)):
+    """
+    Сохраняет координаты и цвета узлов Sankey для указанной zone_type.
+    Тело запроса: { "Узел A": {x, y, color}, ... }
+    """
+    if not payload:
+        raise HTTPException(status_code=400, detail="Пустой payload")
+    sankey_service = SankeyService()
+    with sankey_service:
+        logger.info("sankey service requested success and saved")
+        success, saved = sankey_service.save_colors_positions(zone_type, payload)
+        
+    return SavePositionsResponse(success=success, saved=saved)
+        
 
 
 @router.get("/sankey-gif")
@@ -127,4 +151,3 @@ async def get_sankey_gif(
             status_code=500,
             content={"error": f"Ошибка: {str(e)}"}
         )
-

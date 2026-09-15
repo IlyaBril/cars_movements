@@ -7,7 +7,7 @@ from io import BytesIO
 from typing import List, Tuple, Dict, Annotated, Optional
 from app.db.models import ZoneStats
 from app.db.repository import MovementRepository, GroupRepository
-from app.db.database import SQLiteSession, PostgresSession
+from app.db.database import SQLiteSession
 from app.db.schemas import MovementSchema
 from app.services.zone_service import ZoneService
 from sqlalchemy.orm import Session
@@ -24,7 +24,6 @@ class DataService:
 	
     def __init__(self):
         self._sqlite_sesion = SQLiteSession()
-        self._psql_session = PostgresSession()
         self._group_repo = GroupRepository(self._sqlite_sesion)
         self._movement_repo = MovementRepository(self._sqlite_sesion)
 		
@@ -33,7 +32,6 @@ class DataService:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._sqlite_sesion.close()
-        self._psql_session.close()
 		
     def get_zones_types(self):
         zones_types = self._movement_repo.get_zones_types_repo()	
@@ -87,23 +85,32 @@ class DataService:
             return None                
  
 
-    def _prepare_zones_and_mapping(self, zone_type: str, df: pd.DataFrame) -> Tuple[List[str], List[str], Dict[str, str], List[str]]:
+    def _prepare_zones_and_mapping(
+        self,
+        zone_type: str,
+        df: pd.DataFrame
+        ) -> Tuple[List[str], List[str], Dict[str, str], List[str]]:
+
         """Подготовка списков зон и маппинга"""
 	
         zones_list = self._movement_repo.get_zones_from_db(zone_type)
         zones_list = json.loads(zones_list)		
-        query = self._group_repo.load_groups_from_db(zones_list)
-        
+
+        query = self._movement_repo.load_groups_from_db(zones_list)        
         groups = {}
+
         for group in query:
-            groups[group.group_name] = json.loads(group.zones)
+            logger.info(f'{__name__} - load_groups_from_db {group.name}')
+            groups[group.name] = json.loads(group.children.name)
 
         all_available_zones = df['Точка регистрации'].unique()
         zone_to_group = {}           
         
         for group_name, group_zones in groups.items():
-            existing_zones = [zone for zone in group_zones if zone in all_available_zones]
-            missing_zones = [zone for zone in group_zones if zone not in all_available_zones]
+            existing_zones = [
+                zone for zone in group_zones if zone in all_available_zones]
+            missing_zones = [
+                zone for zone in group_zones if zone not in all_available_zones]
 
             if existing_zones:  # Если есть хотя бы одна существующая зона
                 for zone in existing_zones:
@@ -117,8 +124,8 @@ class DataService:
                 print(f"❌ Группа '{group_name}' пропущена. Нет доступных зон")
                 all_entities.remove(group_name)
     
-            print(f"Группы для замены: {zone_to_group}")
-        logger.info(f'{__name__} _prepare_zones_and_mapping return zone_to_group and zone_list')
+        print(f"Группы для замены: {zone_to_group}")
+        logger.info(f'{__name__} _prepare_zones_and_mapping return \n zone_to_group {zone_to_group} \n {zones_list}')
         return zone_to_group, zones_list
 
     def _transform_dataframe(self, df: pd.DataFrame, zone_to_group: Dict[str, str]) -> pd.DataFrame:
@@ -210,14 +217,16 @@ class DataService:
 
     def calculate_statistics(self, df: pd.DataFrame, date_filter: str, zone_type: str = "main") -> Tuple[List[ZoneStats], str]:
         """Основной метод - оркестрирует все шаги"""
-        # 1. Подготовка зон и маппинга       
+        # 1. Подготовка зон и маппинга
+        #   zone_to_group  - словарь с названием группы и списком зон.
+        #   zones - список зон
         zone_to_group, zones = self._prepare_zones_and_mapping(zone_type, df)
                 
-        # 2. Трансформация DataFrame
-        target_date = pd.Timestamp(date_filter).date()
+        # 2. Изменение названий зон в название группы и удаление дубликатов в DataFrame      
         df_transformed = self._transform_dataframe(df, zone_to_group)
         
         # 3. Расчет почасовой статистики
+        target_date = pd.Timestamp(date_filter).date()
         entries_pivot, exits_pivot = self._calculate_hourly_stats(
             df_transformed, target_date, zones
         )

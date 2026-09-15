@@ -1,5 +1,8 @@
 from marshmallow import Schema, fields, post_load
 from datetime import datetime
+from typing import Dict, Optional
+from pydantic import BaseModel, Field, field_validator
+import re
 
 class MovementSchema(Schema):
 
@@ -15,5 +18,28 @@ class MovementSchema(Schema):
         attribute="Точка_регистрации",
         )
     Номер = fields.Int(allow_none=True)
+
+
+
+class NodeLayoutItem(BaseModel):
+    x: Optional[float] = Field(..., ge=-1.0, le=1.0)
+    y: Optional[float] = Field(..., ge=-1.0, le=1.0)
+    color: Optional[str] = None
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, v):
+        if v is None:
+            return v
+        # допускаем #rgb, #rrggbb, #rrggbbaa
+        #if not re.fullmatch(r"#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})", v):
+        #    raise ValueError(f"Некорректный цвет: {v}")
+        return v.lower()
+
+
+class SavePositionsResponse(BaseModel):
+    success: bool
+    saved: int = 0
+    error: Optional[str] = None
 
 
