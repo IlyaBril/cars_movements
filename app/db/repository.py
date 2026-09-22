@@ -5,15 +5,20 @@ from datetime import datetime
 from fastapi import Depends
 from typing import List, Tuple, Dict, Optional, Annotated
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import text, distinct, select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import distinct, select
 from sqlalchemy import func
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Tuple
 
-from .database import SQLiteSession, PostgresSession, get_sqlite_session
-from .models import Movement,  ZoneGroup, ZonesList, ZoneWithGroup, ZoneReport
+from .database import SQLiteSession, get_sqlite_session
+from .models import (
+    Movement,
+    ZoneGroup,
+    ZonesList,
+    ZoneWithGroup,
+    ZoneReport
+)
 
 
 logging.basicConfig(level=logging.INFO)
@@ -26,17 +31,27 @@ class MovementRepository:
     def __init__(self, session: Session = None):
         self.session = session
 
+    def get_report_zones_names(self, report_name):
+        """Получение списка зон, принадлежащих отчету"""
+        stmt = (
+        select(ZoneWithGroup.name)
+        .join(ZoneReport)
+        .where(ZoneReport.name == report_name)
+        )
+        response = self.session.execute(stmt).scalars().all()
+        return response
 
-    #Отчеты
-    def get_zones_types_repo(self):
-        """Получение списка названий отчетов"""
-        zone_types = self.session.scalars(select(ZonesList.name)).all()
-        logger.info(f'zone_types {zone_types}')
-        return zone_types
-
-    def get_dash_zones_repo(self) -> list[ZonesList]:
+    #Reports
+    def get_dash_zones_repo(self) -> list[ZoneReport]:
         """Получение всех объектов отчетов"""
-        return self.session.query(ZonesList).all()
+        return self.session.query(ZoneReport).all()
+
+    def get_reports_names(self) -> list[str]:
+        """Получение всех объектов отчетов"""
+        stmt = select(ZoneReport.name)
+        reports = self.session.scalars(stmt).all()
+        logger.info(f' \n reports {reports}')
+        return reports
        
     def get_all_zones_from_db(self)-> list[tuple[str]]: 
         """Получение всех существующих зон в базе movement"""
@@ -47,34 +62,9 @@ class MovementRepository:
             ).all()
         return all_zones
 
-    def save_dash_group_to_db(self, group_name: str, zones: List[str]) -> bool:
-        """Сохранение группы отчета"""
-        logger.info(f'{__name__} group_name {group_name} ')
-        try:
-            group = self.session.query(ZonesList).filter_by(name=group_name).first()
-            logger.info(f'{__name__} grpu {group} group_name {group_name} zones {zones}')
-            if group:
-                group.zones = json.dumps(zones, ensure_ascii=False)
-            else:
-                logger.info(f'{__name__} grpu else')
-                group = ZonesList(
-                    name=group_name,
-                    zones=json.dumps(zones, ensure_ascii=False)
-                )
-                self.session.add(group)
-            self.session.commit()
-            return True
-        except Exception as e:
-            self.session.rollback()
-            print(f"Ошибка сохранения группы: {e}")
-            return False
-
-
-    def save_zone_report_to_db(self, report_name: str, zones_br: List[str]) -> bool:
+    def save_zone_report_to_db(self, report_name: str, zones: List[str]) -> bool:
         """Сохранение группы отчета"""
 
-        zones = [s.split("<br>")[0].strip() for s in zones_br]
-        logger.info(f'{__name__} report_name {report_name} ')
         try:
             report = self.session.query(
                 ZoneReport).filter_by(name=report_name).first()
@@ -123,27 +113,11 @@ class MovementRepository:
             print(f"Ошибка сохранения группы: {e}")
             return False
     
-    
-    def delete_dash_group_from_db(self, group_name: str) -> bool:
-        """Удаление группы"""
-        try:
-            group = self.session.query(ZonesList).filter_by(name=group_name).first()
-            if group:
-                self.session.delete(group)
-                self.session.commit()
-            return True
-        except Exception as e:
-            self.session.rollback()
-            print(f"Ошибка удаления группы: {e}")
-            return False
-
-
-    #Data service
+   #Groups
     def load_groups_from_db(self,
         zone_names: Optional[List[str]] = None,
         ) -> List[ZoneWithGroup]:
-        """Выделение из списка зон главной страницы
-           групп для показа"""
+        """Получение списока объектов групп зон"""
         
         query = (
             self.session.query(ZoneWithGroup)
@@ -155,11 +129,66 @@ class MovementRepository:
             query = query.filter(ZoneWithGroup.name.in_(zone_names))
 
         result = query.all()
-        logger.info(f'load_groups_from_db result 2 {result[0].name}')
         return result
 
-    
+    def save_zones_group_to_db(self, group_name: str, zones: List[str]) -> bool:
+        """Сохранение группы модели ZoneWithGroup"""
+        try:
+            group = self.session.query(
+                ZoneWithGroup).filter_by(name=group_name).first()
 
+            if group is None:
+                group = ZoneWithGroup(name=group_name)
+                self.session.add(group)
+                self.session.flush()
+
+            # Собираем существующие зоны отчета в словарь {name: zone}
+            existing_zones = {
+                zone.name: zone
+                for zone in self.session.query(ZoneWithGroup).filter(
+                    ZoneWithGroup.group_id == group.id
+                ).all()
+            }
+
+            # Множество имен зон из переданного списка — для быстрой проверки
+            new_zone_names = set(zones)
+
+            # Удаляем зоны, которых нет в новом списке
+            for zone_name, zone in existing_zones.items():
+                if zone_name not in new_zone_names:
+                    self.session.delete(zone)
+
+            # Обрабатываем зоны из переданного списка
+            for order_index, zone_name in enumerate(zones):
+                if zone_name not in existing_zones:
+                    new_zone = ZoneWithGroup(
+                        name=zone_name,
+                        group_id=group.id,
+                    )
+                    self.session.add(new_zone)
+            self.session.commit()
+            return True
+
+        except Exception as e:
+            self.session.rollback()
+            print(f"Ошибка сохранения группы: {e}")
+            return False
+
+    def delete_group_from_db(self, group_name: str) -> bool:
+        """Удаление группы"""
+        try:
+            group = self.session.query(
+                ZonesWithGroup).filter_by(name=group_name).first()
+            if group:
+                self.session.delete(group)
+                self.session.commit()
+            return True
+        except Exception as e:
+            self.session.rollback()
+            print(f"Ошибка удаления группы: {e}")
+            return False
+
+    #Common
     def get_data_from_db (self, date=None):
         """Получение всей таблицы из движений"""
         try:
@@ -190,11 +219,7 @@ class MovementRepository:
         except SQLAlchemyError as e:
             raise SQLAlchemyError(f"Ошибка при получении данных из таблицы Movement: {e}")
 		
-    def get_zones_from_db(self, zones_list_name: str):
-        zones_list = self.session.query(ZonesList).filter_by(name=zones_list_name).first()
-        logger.info(f'zones_list {zones_list.zones}')
-        return zones_list.zones
-
+    #move to data-service
     def load_from_excel_to_db(self, validated_data: list) -> Tuple[bool, str, int]:
         """Быстрая загрузка больших объемов данных"""
         
@@ -224,7 +249,9 @@ class MovementRepository:
         except SQLAlchemyError as e:
             return False, f"Ошибка: {str(e)}", 0
 
-#Upload     
+
+
+    # Upload   - to data-service  
     def load_excel_to_db(self, excel_path: str = "Движение.xlsx") -> bool:
         """Загрузка данных из Excel в PostgreSQL"""
         try:
@@ -278,10 +305,11 @@ class MovementRepository:
         self.session.query(Movement).delete()
         self.session.commit()
         return count
-
-#Sankey
+ 
+    #Sankey
     def get_zone_attributes(self, group_name):
-        return self.session.query(ZoneReport).filter_by(name=group_name).first()
+        return self.session.query(ZoneReport).filter_by(
+            name=group_name).first()
 
     def get_existing_nodes(self, zone_type):
         stmt = (
@@ -296,19 +324,18 @@ class MovementRepository:
 
     def save_color_positions_db(self, zone_type, positions):
         try:
-            zone_names_with_br = list(positions.keys())
-            labels = []
-            for label in zone_names_with_br:
-                # Извлекаем имя зоны из метки (до <br>)
-                zone_name = label.split('<br>')[0]
-                labels.append(zone_name)
-            logger.info(f"{__name__} /n Sankey positions {positions}")
+            logger.debug(f'save color positions {positions}')
+            labels = list(positions.keys())
+
             existing = self.get_existing_nodes(zone_type)
             logger.info("Sankey layout existing=%s", existing)
             existing_map = {row.name: row for row in existing}
             logger.info("Sankey layout existing map=%s", existing_map)
             saved = 0
-            report = self.session.query(ZoneReport).filter_by(name=zone_type).first()
+
+            report = self.session.query(ZoneReport).filter_by(
+                name=zone_type).first()
+
             for label, item in positions.items():
                 row = existing_map.get(label)
                 if row is None:
@@ -336,82 +363,3 @@ class MovementRepository:
             self.session.rollback()
             logger.exception("Ошибка сохранения Sankey layout: %s", e)
             return False, str(e)
-        
-
-class GroupRepository:
-    """Репозиторий для работы с группами (SQLite)"""
-    
-    def __init__(self, session: Session = None):
-        self.session = session
-    
-    
-    def load_groups_from_db(self,
-        zone_names: Optional[List[str]] = None,
-        ) -> List[ZoneGroup]:
-        """Выделение из списка зон главной страницы
-           групп для показа"""
-        query = self.session.query(ZoneGroup)
-        if zone_names:
-            query = query.filter(ZoneGroup.group_name.in_(zone_names))
-        logger.info(f'{__name__} - load_groups_from_db {query}')
-        return query.order_by(ZoneGroup.group_name).all()
-    
-    def save_group_to_db(self, group_name: str, zones: List[str]) -> bool:
-        """Сохранение группы"""
-        try:
-            group = self.session.query(ZoneGroup).filter_by(group_name=group_name).first()
-            if group:
-                group.zones = json.dumps(zones, ensure_ascii=False)
-            else:
-                group = ZoneGroup(
-                    group_name=group_name,
-                    zones=json.dumps(zones, ensure_ascii=False)
-                )
-                self.session.add(group)
-            self.session.commit()
-            return True
-        except Exception as e:
-            self.session.rollback()
-            print(f"Ошибка сохранения группы: {e}")
-            return False
-
-    def save_zones_group_to_db(self, group_name: str, zones: List[str]) -> bool:
-        """Сохранение группы модели ZoneWithGroup"""
-        try:
-            group = self.session.query(
-                ZoneWithGroup).filter_by(name=group_name).first()
-
-            if group is None:
-                group = ZoneWithGroup(name=group_name)
-                self.session.add(group)
-                self.session.flush()
-
-            for zone in zones:
-                zone = ZoneWithGroup(
-                    name=zone,
-                    group_id=group.id,
-                    )
-                
-                self.session.add(zone)
-            self.session.commit()
-
-            return True
-
-        except Exception as e:
-            self.session.rollback()
-            print(f"Ошибка сохранения группы: {e}")
-            return False
-    
-    def delete_group_from_db(self, group_name: str) -> bool:
-        """Удаление группы"""
-        try:
-            group = self.session.query(ZoneGroup).filter_by(group_name=group_name).first()
-            if group:
-                self.session.delete(group)
-                self.session.commit()
-            return True
-        except Exception as e:
-            self.session.rollback()
-            print(f"Ошибка удаления группы: {e}")
-            return False
-

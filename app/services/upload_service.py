@@ -6,8 +6,8 @@ from fastapi import Depends
 from io import BytesIO
 from typing import List, Tuple, Dict, Annotated, Optional
 from app.db.models import ZoneStats
-from app.db.repository import MovementRepository, GroupRepository
-from app.db.database import SQLiteSession, PostgresSession
+from app.db.repository import MovementRepository
+from app.db.database import SQLiteSession
 from app.db.schemas import MovementSchema
 from app.services.zone_service import ZoneService
 from sqlalchemy.orm import Session
@@ -22,8 +22,6 @@ class DataService:
 	
     def __init__(self):
         self._sqlite_sesion = SQLiteSession()
-        self._psql_session = PostgresSession()
-        self._group_repo = GroupRepository(self._sqlite_sesion)
         self._movement_repo = MovementRepository(self._sqlite_sesion)
 		
     def __enter__(self):

@@ -40,8 +40,9 @@ def analyze_zones(
     
     try:
         df = data_service.get_data(date)
-        
+        logger.info(f'dfff {df}')
         stats, balance = data_service.calculate_statistics(df, date, zone_type)
+        logger.info(f' stats {stats}')
         result = []
         for zone_stat in stats:
             result.append({

@@ -6,7 +6,7 @@ from fastapi import Depends
 from io import BytesIO
 from typing import List, Tuple, Dict, Annotated, Optional
 from app.db.models import ZoneStats
-from app.db.repository import MovementRepository, GroupRepository
+from app.db.repository import MovementRepository
 from app.db.database import SQLiteSession
 from app.db.schemas import MovementSchema
 from app.services.zone_service import ZoneService
@@ -24,7 +24,6 @@ class DataService:
 	
     def __init__(self):
         self._sqlite_sesion = SQLiteSession()
-        self._group_repo = GroupRepository(self._sqlite_sesion)
         self._movement_repo = MovementRepository(self._sqlite_sesion)
 		
     def __enter__(self):
@@ -33,8 +32,8 @@ class DataService:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._sqlite_sesion.close()
 		
-    def get_zones_types(self):
-        zones_types = self._movement_repo.get_zones_types_repo()	
+    def get_zones_types(self) -> List[str]:
+        zones_types = self._movement_repo.get_reports_names()    
         return zones_types
     
     def get_data(self, date_filter=None) -> pd.DataFrame:
@@ -50,7 +49,6 @@ class DataService:
             movements = self._movement_repo.get_data_from_db(target_date)
             schema = MovementSchema(many=True)
             df = pd.DataFrame(schema.dump(movements, many=True))
-            print(df)
             if df.empty:
                 raise ValueError("База данных пуста. Сначала загрузите данные через /load-data")
             df['Дата'] = pd.to_datetime(df['Дата'], format='%Y-%m-%d %H:%M:%S')                
@@ -59,32 +57,6 @@ class DataService:
         except Exception as e:
             raise ValueError(f"Ошибка при чтении данных: {str(e)}")
 
-
-    def export_to_excel(self) -> Optional[bytes]:
-        """Экспортировать данные в Excel"""
-        try:
-            movements = self._movement_repo.get_data_from_db()
-            schema = MovementSchema(many=True)           
-            validated_data = schema.dump(movements)
-
-            df = pd.DataFrame(validated_data)
-            logger.info(f'{__name__} validated data done')
-            if df.empty:
-                return None
-            
-            # Создаем Excel файл в памяти
-            output = BytesIO()
-            logger.info(f'{__name__} output')
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df.to_excel(writer, sheet_name='Данные', index=False)
-            logger.info(f'{__name__} to excel')
-            return output.getvalue()
-            
-        except Exception as e:
-            print(f"Ошибка экспорта: {e}")
-            return None                
- 
-
     def _prepare_zones_and_mapping(
         self,
         zone_type: str,
@@ -92,9 +64,9 @@ class DataService:
         ) -> Tuple[List[str], List[str], Dict[str, str], List[str]]:
 
         """Подготовка списков зон и маппинга"""
-	
-        zones_list = self._movement_repo.get_zones_from_db(zone_type)
-        zones_list = json.loads(zones_list)		
+        
+        zones_list = self._movement_repo.get_report_zones_names(zone_type)
+        logger.debug(f'zones_list {zones_list}')		
 
         query = self._movement_repo.load_groups_from_db(zones_list)        
         groups = {}
@@ -222,6 +194,9 @@ class DataService:
         #   zone_to_group  - словарь с названием группы и списком зон.
         #   zones - список зон
         zone_to_group, zones = self._prepare_zones_and_mapping(zone_type, df)
+        logger.debug(f" calculate_statistics \n"
+                     f" zone_to_group {zone_to_group} \n"
+                     f" zones {zones}")
                 
         # 2. Изменение названий зон в название группы и удаление дубликатов в DataFrame      
         df_transformed = self._transform_dataframe(df, zone_to_group)
@@ -236,7 +211,9 @@ class DataService:
         
         # 4. Формирование результата
         return self._build_result(entries_pivot, exits_pivot, zones, zone_type)
-				
+
+
+    #Upload			
     def load_excel_to_db(self):
         return self._movement_repo.load_excel_to_db()
 
@@ -269,7 +246,30 @@ class DataService:
         except Exception as e:
             logger.error(f'{__name__} Unexpected error: {str(e)}', exc_info=True)
             return False, f"Ошибка: {str(e)}", 0
+
+    def export_to_excel(self) -> Optional[bytes]:
+        """Экспортировать данные в Excel"""
+        try:
+            movements = self._movement_repo.get_data_from_db()
+            schema = MovementSchema(many=True)           
+            validated_data = schema.dump(movements)
+
+            df = pd.DataFrame(validated_data)
+            logger.info(f'{__name__} validated data done')
+            if df.empty:
+                return None
             
+            # Создаем Excel файл в памяти
+            output = BytesIO()
+            logger.info(f'{__name__} output')
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Данные', index=False)
+            logger.info(f'{__name__} to excel')
+            return output.getvalue()
+            
+        except Exception as e:
+            print(f"Ошибка экспорта: {e}")
+            return None             
 
     def clear_database(self) -> Tuple[bool, str]:
         """Очистить базу данных"""

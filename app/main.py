@@ -1,10 +1,8 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
-from .db.database import init_sqlite_database, init_postgres_database, close_db_connections
-from .db.repository import MovementRepository, GroupRepository
-from .db.models import Base
+from .db.database import init_sqlite_database, close_db_connections
 from .config import STATIC_DIR
 from .routes import analysis, admin_groups, sankey, upload
 
@@ -12,8 +10,7 @@ from .routes import analysis, admin_groups, sankey, upload
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Инициализация баз данных при старте
-    #init_sqlite_database()
-    #init_postgres_database()
+    init_sqlite_database()
     yield
     # Очистка при завершении
     close_db_connections()

@@ -8,7 +8,6 @@ from typing import List
 from app.services.zone_service import ZoneService
 from app.services.data_service import DataService
 
-from app.db.repository import MovementRepository, GroupRepository
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,12 +28,9 @@ async def groups_page(request: Request):
     """Получить все группы"""
 
     groups = zone_service.get_groups()
-    print(f"{__name__} Существующие группы: {groups}")
     available_zones = zone_service.get_available_zones()
         
     # Получаем все зоны для отображения (включая занятые)
-    print(f"{__name__} available zones: {available_zones}")
-    
     return templates.TemplateResponse(
         request=request, 
         name="admin_groups.html",
@@ -56,8 +52,7 @@ async def get_edit_data(group_name: str):
     
     # Получаем доступные зоны (включая зоны редактируемой группы)
     available_zones = zone_service.get_available_zones(editing_group=group_name)
-    print('get_edit_data available_zones', available_zones)
-    print('get_edit_data current_zones', groups[group_name])
+
     return {
         "available_zones": available_zones,
         "current_zones": groups[group_name]
@@ -76,7 +71,7 @@ async def create_group(request: GroupCreateRequest):
         
         # Проверяем, что зоны не используются в других группах
         existing_groups = zone_service.get_groups()
-        print('admin groups existing_groups ', existing_groups)
+        logger.info('admin groups existing_groups ', existing_groups)
         for group_name, zones in existing_groups.items():
             if group_name != request.group_name:
                 for zone in request.zones:
@@ -85,9 +80,11 @@ async def create_group(request: GroupCreateRequest):
                             status_code=400, 
                             detail=f"Зона '{zone}' уже используется в группе '{group_name}'"
                         )
-        logger.info(f'{__name__} group {request.group_name.strip()} zones {request.zones}')
-        success = zone_service.save_group_to_db(request.group_name.strip(), request.zones)
-        success = zone_service.save_zones_group(request.group_name.strip(), request.zones)
+        logger.info(f'{__name__} group {request.group_name.strip()}'
+                    f'zones {request.zones}')
+
+        success = zone_service.save_zones_group(
+            request.group_name.strip(), request.zones)
         
         if success:
             return {"status": "success", "message": f"Группа '{request.group_name}' успешно сохранена"}
@@ -123,7 +120,7 @@ async def zones_page(request: Request):
     groups = list(zone_service.get_groups().keys())
     zones = zone_service.get_all_zones()
     all_zones = groups + zones
-    print(f"{__name__} all_zoness: {groups}")
+    logger.info(f" all_zones: {all_zones}")
     
     return templates.TemplateResponse(
         request=request, 
@@ -149,14 +146,12 @@ async def get_edit_zones_data(group_name: str):
     groups_names = list(zone_service.get_groups().keys())
     zones = zone_service.get_all_zones()
     all_zones = groups_names + zones
-    print('get_edit_data all', all_zones)
-    print('get_edit_data groups', dash_zones[group_name])
+    logger.info('get_edit_data all', all_zones)
     
     return {
         "available_zones": all_zones,
         "current_zones": dash_zones[group_name],
     }
-
 
 
 @router.post("/zones/create")
@@ -170,7 +165,6 @@ async def create_group(request: GroupCreateRequest):
         if not request.zones:            
             raise HTTPException(status_code=400, detail="Выберите хотя бы одну зону")
                 
-        #success = zone_service.save_dash_group(request.group_name.strip(), request.zones)
         success = zone_service.save_zone_report(request.group_name.strip(), request.zones)
         if success:
             return {"status": "success", "message": f"Группа '{request.group_name}' успешно сохранена"}

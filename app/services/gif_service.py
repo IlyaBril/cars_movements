@@ -1,7 +1,7 @@
 import os
 import tempfile
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import List, Optional
 import pandas as pd
 import plotly.graph_objects as go
@@ -29,7 +29,7 @@ class GifService:
         df: pd.DataFrame,
         current_time: datetime,
         allowed_zones: list,
-        target_date: date
+        target_date: date,
     ) -> dict:
         """Подготовка данных Sankey для конкретного момента времени"""
         df_enter = df[df['Дата'] <= current_time].copy()

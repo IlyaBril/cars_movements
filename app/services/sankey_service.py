@@ -6,32 +6,13 @@ import random
 from typing import List, Dict, Optional, Tuple
 from collections import defaultdict
 from datetime import datetime
-from app.db.repository import MovementRepository, GroupRepository
-from app.db.database import SQLiteSession, PostgresSession
+from app.db.repository import MovementRepository
+from app.db.database import SQLiteSession
 from app.services.data_service import DataService
 
 logger = logging.getLogger(__name__)
 
 ENABLE_CALIBRATION = True
-
-ZONES_POSITIONS = {
-    'M150. Выход с линии DKD Off': {'x': 0.01, 'y': 0.3, 'color': '#FFEAA7'},
-    'M151. Выход с линии DKD+': {'x': 0.01, 'y': 0.8, 'color': '#FFEAA7'},
-    'БелЗона_FORI': {'x': 0.1, 'y': 0.7, 'color': '#FFEAA7'},
-    'Качество': {'x': 0.15, 'y': 0.2, 'color': '#FFEAA7'},   
-    'M440. GRT': {'x': 0.2, 'y': 0.5, 'color': '#FF6B6B'},
-    'М444_М446 Валидация': {'x': 0.3, 'y': 0.5, 'color': '#45B7D1'},
-    'M450. Контроль электрики': {'x': 0.6, 'y': 0.2, 'color': '#DDA0DD'},
-    'M470. Передача на СГП (BLAN)': {'x': 0.8, 'y': 0.2, 'color': '#DDA0DD'}, 
-    'ТиД': {'x': 0.8, 'y': 0.7, 'color': '#4ECDC4'},
-    'M471. Отказ по качеству': {'x': 0.6, 'y': 0.6, 'color': '#96CEB4'},
-    'M445. Зона выборочного контроля': {'x': 0.45, 'y': 0.6, 'color': '#FFEAA7'},
-    'M422. Некомплекты': {'x': 0.89, 'y': 0.87, 'color': '#FFEAA7'},
-    'M500. Приемка на СГП (MADU)': {'x': 0.95, 'y': 0.3, 'color': '#FFEAA7'},
-    'M483. Чистые автомобили': {'x': 0.95, 'y': 0.5, 'color': '#FFEAA7'},
-    'M412. Ретрофит Телематика': {'x': 0.9, 'y': 0.1, 'color': '#FFEAA7'},
-    'calibration': {'x': -0.1, 'y': 0.5, 'color': '#FFFFF0'}, 
-}
 
 
 class SankeyService:
@@ -39,8 +20,6 @@ class SankeyService:
     
     def __init__(self):
         self._sqlite_sesion = SQLiteSession()
-        self._psql_session = PostgresSession()
-        self._group_repo = GroupRepository(self._sqlite_sesion)
         self._movement_repo = MovementRepository(self._sqlite_sesion)
 		
     def __enter__(self):
@@ -48,7 +27,6 @@ class SankeyService:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._sqlite_sesion.close()
-        self._psql_session.close()
 
     def get_zone_attributes(self, group_name):
         zone_attributes = self._movement_repo.get_zone_attributes(group_name)       
@@ -63,9 +41,40 @@ class SankeyService:
      
         sucsess, saved = self._movement_repo.save_color_positions_db(zone_type, positions)
         return sucsess, saved
-     
-    
 
+    def get_positions_colors_from_obj(self, zone_names, zone_type):
+        node_positions = []
+        node_colors = []
+
+        report = self.get_zone_attributes(zone_type)
+        zones_by_name = {z.name: z for z in report.report_zones}
+        logger.info(f'{__name__} zones_by_name {zones_by_name} \n zone_names {zone_names}')
+        for zone_name in zone_names:
+            zone = zones_by_name.get(zone_name)
+
+            if zone is None or (zone.x or zone.y or zone.color is None):
+                node_positions.append([
+                    random.uniform(0.1, 0.9),
+                    random.uniform(0.1, 0.9),
+                ])
+                node_colors.append(
+                    f'rgba({random.randint(100, 200)}, '
+                    f'{random.randint(100, 200)}, '
+                    f'{random.randint(100, 200)}, 0.8)'
+                )
+                logger.warning(
+                    f"Зона '{zone_name}' не найдена в отчёте или без координат, "
+                    f"используются случайные координаты"
+                )
+
+            else:
+                node_positions.append([zone.x, zone.y])
+                node_colors.append(zone.color)
+            logger.info(f"Зона '{zone_name}' positions x {zone.x} y {zone.y} color {zone.color}")                   
+                   
+        return node_positions, node_colors   
+    
+    
 def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dict:
     """
     df - таблица, фильтрованная по условию: если есть движение VIN в этот день,
@@ -139,75 +148,6 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
     # ====================================
 
     return sankey_data
-
-def get_positions_colors(zone_names):
-    # Определяем позиции и цвета для каждой зоны
-    node_positions = []
-    node_colors = []
-    
-    for zone_name in zone_names:
-        if zone_name in ZONE_POSITIONS:
-            pos = ZONE_POSITIONS[zone_name]
-            node_positions.append([pos['x'], pos['y']])
-            node_colors.append(pos['color'])
-            logger.info(f"Зона '{zone_name}' positions x {pos['x']} y {pos['y']}")
-        else:
-            # Если зона не найдена в словаре, используем случайные координаты и цвет
-            logger.warning(f"Зона '{zone_name}' не найдена в ZONE_POSITIONS, используются случайные координаты")
-            node_positions.append([random.uniform(0.1, 0.9), random.uniform(0.1, 0.9)])
-            node_colors.append(f'rgba({random.randint(100,200)}, {random.randint(100,200)}, {random.randint(100,200)}, 0.8)')
-
-    return node_positions, node_colors
-
-
-def get_positions_colors_from_obj(zone_names, zone_type):
-    service = SankeyService()
-    node_positions = []
-    node_colors = []
-
-    with service:
-        report = service.get_zone_attributes(zone_type)
-        zones_by_name = {z.name: z for z in report.report_zones}
-        logger.info(f'{__name__} zones_by_name {zones_by_name} \n zone_names {zone_names}')
-        for zone_name in zone_names:
-            zone = zones_by_name.get(zone_name)
-
-            if zone is None:
-                 node_positions.append([
-                    random.uniform(0.1, 0.9),
-                    random.uniform(0.1, 0.9),
-                ])
-                 node_colors.append(
-                    f'rgba({random.randint(100, 200)}, '
-                    f'{random.randint(100, 200)}, '
-                    f'{random.randint(100, 200)}, 0.8)'
-                )
-            if zone.x is None or zone.y is None:
-
-
-                
-
-
-                
-                   
-                    
-                if zone.color is None:
-                    
-                    
-                logger.info(f"Зона '{zone_name}' positions x {zone.x} y {zone.y} color {zone.color}")
-
-            else:
-                node_positions.append([zone.x, zone.y])
-                node_colors.append(zone.color)
-                logger.warning(
-                    f"Зона '{zone_name}' не найдена в отчёте или без координат, "
-                    f"используются случайные координаты"
-                )
-               
-   
-            
-
-    return node_positions, node_colors
 
 
 def get_link_colors(sources: list, node_colors: list, opacity: float = 0.4) -> list:
@@ -317,7 +257,9 @@ def create_sankey_chart(
     values      = sankey_data['values']
 
     # Определяем позиции и цвета для каждой зоны
-    node_positions, node_colors = get_positions_colors_from_obj(zone_names, zone_type)
+    service = SankeyService()
+    with service:
+        node_positions, node_colors = service.get_positions_colors_from_obj(zone_names, zone_type)
 
     # Цвета для связей
     link_colors = get_link_colors(sources, node_colors, opacity=0.4)

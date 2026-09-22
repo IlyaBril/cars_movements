@@ -96,7 +96,7 @@ async def export_excel():
         if excel_data is None:
             raise HTTPException(status_code=404, detail='Нет данных для экспорта')
         
-        # ✅ Просто возвращаем Response с байтами
+        # Просто возвращаем Response с байтами
         return Response(
             content=excel_data,
             media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
