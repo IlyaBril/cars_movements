@@ -64,6 +64,9 @@ class ZoneWithGroup(Base):
         UniqueConstraint("name", "group_id", name="uq_zone_name_per_group"),
     )
 
+    def __repr__(self):
+        return f'<ZoneWithGroup id={self.id} name={self.name!r}>'
+
 
 #Старые модели
 class ZonesList(Base):

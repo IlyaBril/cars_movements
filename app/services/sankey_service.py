@@ -172,24 +172,40 @@ def get_positions_colors_from_obj(zone_names, zone_type):
         for zone_name in zone_names:
             zone = zones_by_name.get(zone_name)
 
-            if zone is not None and zone.x is not None and zone.y is not None:
-                node_positions.append([zone.x, zone.y])
-                node_colors.append(zone.color)
-                logger.info(f"Зона '{zone_name}' positions x {zone.x} y {zone.y}")
-            else:
-                logger.warning(
-                    f"Зона '{zone_name}' не найдена в отчёте или без координат, "
-                    f"используются случайные координаты"
-                )
-                node_positions.append([
+            if zone is None:
+                 node_positions.append([
                     random.uniform(0.1, 0.9),
                     random.uniform(0.1, 0.9),
                 ])
-                node_colors.append(
+                 node_colors.append(
                     f'rgba({random.randint(100, 200)}, '
                     f'{random.randint(100, 200)}, '
                     f'{random.randint(100, 200)}, 0.8)'
                 )
+            if zone.x is None or zone.y is None:
+
+
+                
+
+
+                
+                   
+                    
+                if zone.color is None:
+                    
+                    
+                logger.info(f"Зона '{zone_name}' positions x {zone.x} y {zone.y} color {zone.color}")
+
+            else:
+                node_positions.append([zone.x, zone.y])
+                node_colors.append(zone.color)
+                logger.warning(
+                    f"Зона '{zone_name}' не найдена в отчёте или без координат, "
+                    f"используются случайные координаты"
+                )
+               
+   
+            
 
     return node_positions, node_colors
 

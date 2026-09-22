@@ -23,7 +23,7 @@ def root(request: Request):
         
     date = default_date()
     zone_types = data_service.get_zones_types()
-    logger.info(f'{__name__} zone_types {zone_types}')
+    logger.info(f'zone_types {zone_types}')
     return templates.TemplateResponse(  
         request=request, name="index(bootstrap).html",
         context={"default_date": date, "zone_types": zone_types},
@@ -42,7 +42,6 @@ def analyze_zones(
         df = data_service.get_data(date)
         
         stats, balance = data_service.calculate_statistics(df, date, zone_type)
-        print(f'{__name__} stats, balance ',stats, balance)
         result = []
         for zone_stat in stats:
             result.append({

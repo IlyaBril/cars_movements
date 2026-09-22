@@ -100,8 +100,9 @@ class DataService:
         groups = {}
 
         for group in query:
-            logger.info(f'{__name__} - load_groups_from_db {group.name}')
-            groups[group.name] = json.loads(group.children.name)
+            logger.info(f'for groups  {group.name}')
+            groups[group.name] = [children.name for children in group.children]
+            logger.info(f'for groups  {groups}')
 
         all_available_zones = df['Точка регистрации'].unique()
         zone_to_group = {}           

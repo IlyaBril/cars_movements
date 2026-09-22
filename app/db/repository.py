@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 from fastapi import Depends
 from typing import List, Tuple, Dict, Optional, Annotated
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import text, distinct, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func
@@ -31,7 +31,7 @@ class MovementRepository:
     def get_zones_types_repo(self):
         """Получение списка названий отчетов"""
         zone_types = self.session.scalars(select(ZonesList.name)).all()
-        logger.info(f'{__name__} zone_types {zone_types}')
+        logger.info(f'zone_types {zone_types}')
         return zone_types
 
     def get_dash_zones_repo(self) -> list[ZonesList]:
@@ -144,16 +144,19 @@ class MovementRepository:
         ) -> List[ZoneWithGroup]:
         """Выделение из списка зон главной страницы
            групп для показа"""
-        logger.info(f'{__name__} - load_groups_from_db {zone_names}')
+        
         query = (
             self.session.query(ZoneWithGroup)
-            .filter(ZoneWithGroup.children.any()
+            .filter(ZoneWithGroup.children.any())
             .options(selectinload(ZoneWithGroup.children))
         )
+        
         if zone_names:
             query = query.filter(ZoneWithGroup.name.in_(zone_names))
-        
-        return query.all()
+
+        result = query.all()
+        logger.info(f'load_groups_from_db result 2 {result[0].name}')
+        return result
 
     
 
@@ -189,7 +192,7 @@ class MovementRepository:
 		
     def get_zones_from_db(self, zones_list_name: str):
         zones_list = self.session.query(ZonesList).filter_by(name=zones_list_name).first()
-        logger.info(f'{__name__} zones_list {zones_list.zones}')
+        logger.info(f'zones_list {zones_list.zones}')
         return zones_list.zones
 
     def load_from_excel_to_db(self, validated_data: list) -> Tuple[bool, str, int]:

@@ -48,13 +48,11 @@ async def get_sankey_chart(
 ):
     try:
         data_service = DataService()
-        logger.info(f'{__name__} get sankey chart, data service done')
+        logger.info(f'get sankey chart, data service done')
         with data_service:
-            df = data_service.get_data(date)
-
-            
+            df = data_service.get_data(date)       
             zone_to_group, allowed_zones = data_service._prepare_zones_and_mapping(zone_type, df)
-            logger.info(f'{__name__} get sankey chart, \n'
+            logger.info(f'get sankey chart, \n'
                         f'zone_to_group {zone_to_group} \n'
                         f'allowed_zones {allowed_zones}')
             df = data_service._transform_dataframe(df, zone_to_group)
