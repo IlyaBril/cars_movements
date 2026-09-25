@@ -43,8 +43,8 @@
             font-family: 'Courier New', monospace;
             font-size: 12px;
             z-index: 9999;
-            min-width: 280px;
-            max-width: 400px;
+            min-width: 300px;
+            max-width: 420px;
             max-height: 460px;
             overflow-y: auto;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
@@ -127,11 +127,16 @@
             margin-top: 4px;
         }
 
+        /* ── Панель выбора цвета + прозрачности ───────────────── */
+        .color-picker-panel {
+            padding: 8px 4px 10px 4px;
+            border-top: 1px dashed rgba(255,255,255,0.12);
+            margin-top: 4px;
+        }
         .color-picker-row {
             display: flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 0 8px 4px;
+            gap: 8px;
         }
         .color-picker-row input[type="color"] {
             width: 44px;
@@ -141,11 +146,66 @@
             border-radius: 4px;
             background: none;
             cursor: pointer;
+            flex-shrink: 0;
         }
         .color-picker-row .picker-hint {
             font-size: 10px;
             color: #888;
             margin-left: auto;
+        }
+
+        /* Слайдер прозрачности */
+        .opacity-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .opacity-row label {
+            font-size: 11px;
+            color: #81c784;
+            min-width: 72px;
+            white-space: nowrap;
+        }
+        .opacity-row input[type="range"] {
+            flex: 1;
+            height: 4px;
+            accent-color: #4fc3f7;
+            cursor: pointer;
+        }
+        .opacity-value {
+            font-size: 11px;
+            color: #fff;
+            font-weight: bold;
+            min-width: 38px;
+            text-align: right;
+        }
+
+        /* Мини-превью цвета с прозрачностью */
+        .opacity-preview {
+            display: inline-block;
+            width: 22px;
+            height: 14px;
+            border-radius: 3px;
+            border: 1px solid rgba(255,255,255,0.25);
+            vertical-align: middle;
+            margin-right: 4px;
+            /* шахматный фон для наглядности прозрачности */
+            background-image:
+                linear-gradient(45deg, #444 25%, transparent 25%),
+                linear-gradient(-45deg, #444 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #444 75%),
+                linear-gradient(-45deg, transparent 75%, #444 75%);
+            background-size: 8px 8px;
+            background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+            position: relative;
+            overflow: hidden;
+        }
+        .opacity-preview::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 2px;
         }
 
         .close-btn {
@@ -189,7 +249,7 @@
                 bottom: 70px;
                 right: 10px;
                 left: 10px;
-                max-height: 260px;
+                max-height: 300px;
                 font-size: 11px;
                 min-width: auto;
             }
@@ -285,7 +345,7 @@
                             </li>
                         </ul>
 
-                        <button class="btn btn-warning btn-sm" onclick="saveNodePositions()" title="Сохранить текущее расположение и цвета узлов">
+                        <button class="btn btn-warning btn-sm" onclick="saveNodePositions()" title="Сохранить текущее расположение, цвета и прозрачность узлов">
                             💾 Сохранить позиции
                         </button>
                     </div>
@@ -323,11 +383,11 @@
 
     <div id="coordinatesDisplay">
         <div class="coord-title">
-            <span>📍 Координаты и цвета узлов</span>
+            <span>📍 Координаты, цвета и прозрачность</span>
             <button class="close-btn" onclick="closeCoordinates()" title="Закрыть">✕</button>
         </div>
         <div id="coordinatesList"></div>
-        <div class="coord-status" id="coordStatus">Перетащите узел или измените цвет</div>
+        <div class="coord-status" id="coordStatus">Перетащите узел или настройте цвет/прозрачность</div>
     </div>
 
     <script>
@@ -339,10 +399,54 @@
         let isAutoRefreshEnabled = true;
         let showCoords = false;
         let lastNodePositions = {};
-        let pendingColors = {};        // {label: '#rrggbb'} — несохранённые цвета
-        let serverColors = {};         // цвета, полученные с сервера
-        let colorPickerOpenFor = null; // label узла, для которого открыта палитра
+
+        // pendingColors: { label: { color: '#rrggbb', opacity: 0..1 } }
+        let pendingColors = {};
+        // serverColors:  { label: { color: '#rrggbb', opacity: 0..1 } }
+        let serverColors = {};
+
+        let colorPickerOpenFor = null; // label узла, для которого открыта панель
         let graphDivInstance = null;
+
+        // ============================================================
+        //  УТИЛИТЫ ЦВЕТА
+        // ============================================================
+        /**
+         * HEX → RGBA.
+         * Поддерживает #rgb, #rrggbb. Если на входе уже rgba(...) — вернёт как есть.
+         */
+        function hexToRgba(hex, opacity) {
+            if (!hex) return `rgba(136,136,136,${opacity})`;
+            if (typeof hex === 'string' && hex.startsWith('rgba')) return hex;
+
+            let h = String(hex).replace('#', '').trim();
+            if (h.length === 3) {
+                h = h.split('').map(c => c + c).join('');
+            }
+            if (h.length !== 6) {
+                return `rgba(136,136,136,${opacity})`;
+            }
+            const r = parseInt(h.substring(0, 2), 16);
+            const g = parseInt(h.substring(2, 4), 16);
+            const b = parseInt(h.substring(4, 6), 16);
+            const a = (opacity === undefined || opacity === null) ? 1 : opacity;
+            return `rgba(${r},${g},${b},${a})`;
+        }
+
+        /** Нормализовать запись стиля узла к виду {color, opacity} */
+        function normalizeStyle(entry, fallbackColor) {
+            if (!entry) {
+                return { color: fallbackColor || '#888888', opacity: 1 };
+            }
+            if (typeof entry === 'string') {
+                // поддержка старого формата — только цвет
+                return { color: entry, opacity: 1 };
+            }
+            return {
+                color: entry.color || fallbackColor || '#888888',
+                opacity: (entry.opacity === undefined || entry.opacity === null) ? 1 : entry.opacity
+            };
+        }
 
         // ============================================================
         //  ПЕРЕКЛЮЧЕНИЕ ЗОНЫ
@@ -511,10 +615,6 @@
             return [];
         }
 
-        /**
-         * Получить массив цветов линий (link.color) — плоский массив длиной = число связей.
-         * Возвращает null, если цвет задан не как массив (например, одна строка).
-         */
         function getLinkColors(graphDiv) {
             try {
                 const src = graphDiv?.data?.[0];
@@ -530,11 +630,15 @@
                 const src = graphDiv?.data?.[0];
                 const s = src?.link?.source;
                 if (!s) return [];
-                // бывает TypedArray — приводим к обычному массиву
                 return Array.from(s);
             } catch (e) { return []; }
         }
 
+        /**
+         * Читает цвета узлов из графа и сохраняет их как {label: {color, opacity:1}}.
+         * Прозрачность сервер в готовом графе не отдаёт отдельно, поэтому
+         * восстанавливаем её из rgba(...) если цвет задан в этом формате.
+         */
         function readServerColorsFromGraph() {
             const graphDiv = document.querySelector('.plotly-graph-div');
             const result = {};
@@ -543,7 +647,20 @@
                 const positions = getNodeCoordinates(graphDiv);
                 const colors = getNodeColors(graphDiv);
                 positions.forEach((p, i) => {
-                    if (colors[i]) result[p.label] = colors[i];
+                    const raw = colors[i];
+                    if (!raw) return;
+                    if (typeof raw === 'string' && raw.startsWith('rgba')) {
+                        const m = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\)/);
+                        if (m) {
+                            const r = parseInt(m[1]).toString(16).padStart(2, '0');
+                            const g = parseInt(m[2]).toString(16).padStart(2, '0');
+                            const b = parseInt(m[3]).toString(16).padStart(2, '0');
+                            const a = (m[4] !== undefined) ? parseFloat(m[4]) : 1;
+                            result[p.label] = { color: `#${r}${g}${b}`, opacity: a };
+                            return;
+                        }
+                    }
+                    result[p.label] = { color: raw, opacity: 1 };
                 });
             } catch (e) { /* ignore */ }
             return result;
@@ -580,10 +697,40 @@
                     const roundedX = Math.round(p.x * 100) / 100;
                     const roundedY = Math.round(p.y * 100) / 100;
 
-                    const actualColor = nodeColors[p.index] || '#888888';
-                    const currentColor = pendingColors[p.label]
-                        || serverColors[p.label]
-                        || actualColor;
+                    // Текущий стиль: pending → server → из графа (по умолчанию opacity=1)
+                    const styleFromPending = pendingColors[p.label];
+                    const styleFromServer = serverColors[p.label];
+                    const fallbackColor = nodeColors[p.index] || '#888888';
+
+                    let currentColor, currentOpacity;
+                    if (styleFromPending) {
+                        const st = normalizeStyle(styleFromPending, fallbackColor);
+                        currentColor = st.color;
+                        currentOpacity = st.opacity;
+                    } else if (styleFromServer) {
+                        const st = normalizeStyle(styleFromServer, fallbackColor);
+                        currentColor = st.color;
+                        currentOpacity = st.opacity;
+                    } else {
+                        // пробуем вытащить opacity из rgba в графе
+                        const raw = nodeColors[p.index];
+                        if (typeof raw === 'string' && raw.startsWith('rgba')) {
+                            const m = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\)/);
+                            if (m) {
+                                const r = parseInt(m[1]).toString(16).padStart(2, '0');
+                                const g = parseInt(m[2]).toString(16).padStart(2, '0');
+                                const b = parseInt(m[3]).toString(16).padStart(2, '0');
+                                currentColor = `#${r}${g}${b}`;
+                                currentOpacity = (m[4] !== undefined) ? parseFloat(m[4]) : 1;
+                            } else {
+                                currentColor = raw || '#888888';
+                                currentOpacity = 1;
+                            }
+                        } else {
+                            currentColor = raw || '#888888';
+                            currentOpacity = 1;
+                        }
+                    }
 
                     let isChanged = false;
                     if (lastNodePositions[key]) {
@@ -598,14 +745,29 @@
                     lastNodePositions[key] = { x: p.x, y: p.y };
 
                     const pickerOpen = colorPickerOpenFor === p.label;
+                    const opacityPercent = Math.round(currentOpacity * 100);
+
                     const pickerHtml = pickerOpen
-                        ? `<div class="color-picker-row">
-                               <input type="color" value="${currentColor}"
-                                      oninput="onColorInput(${p.index}, this.value)"
-                                      onchange="onColorChange(${p.index}, this.value)">
-                               <span class="picker-hint">выбирайте цвет, палитра не закроется</span>
-                               <button class="close-btn" style="font-size:14px; margin-left:4px;"
-                                       onclick="closeColorPicker()" title="Закрыть палитру">✕</button>
+                        ? `<div class="color-picker-panel">
+                               <div class="color-picker-row">
+                                   <input type="color" value="${currentColor}"
+                                          oninput="onColorInput(${p.index}, this.value)"
+                                          onchange="onColorChange(${p.index}, this.value)">
+                                   <span class="opacity-preview" data-preview-index="${p.index}"
+                                         style="background-color: ${hexToRgba(currentColor, currentOpacity)};"></span>
+                                   <span class="picker-hint">цвет не закроет панель</span>
+                                   <button class="close-btn" style="font-size:14px; margin-left:4px;"
+                                           onclick="closeColorPicker()" title="Закрыть панель">✕</button>
+                               </div>
+                               <div class="opacity-row">
+                                   <label>Прозрачность</label>
+                                   <input type="range" min="0" max="100" step="1"
+                                          value="${opacityPercent}"
+                                          data-opacity-index="${p.index}"
+                                          oninput="onOpacityInput(${p.index}, this.value)"
+                                          onchange="onOpacityChange(${p.index}, this.value)">
+                                   <span class="opacity-value" data-opacity-val="${p.index}">${opacityPercent}%</span>
+                               </div>
                            </div>`
                         : '';
 
@@ -619,14 +781,14 @@
                         <div class="coord-item">
                             <div class="coord-row">
                                 <span class="coord-label" data-node-index="${p.index}"
-                                      title="Кликните для выбора цвета"
+                                      title="Кликните для настройки цвета и прозрачности"
                                       onclick="openColorPickerByIndex(${p.index})">
                                     <span class="coord-color-dot" data-dot-index="${p.index}"
-                                          style="background:${currentColor};"></span>
+                                          style="background:${hexToRgba(currentColor, currentOpacity)};"></span>
                                     ${safeLabel}
                                 </span>
                                 <span class="coord-value ${isChanged ? 'coord-changed' : ''}">
-                                    (${roundedX.toFixed(2)}, ${roundedY.toFixed(2)})${isChanged ? ' ✦' : ''}
+                                    (${roundedX.toFixed(2)}, ${roundedY.toFixed(2)}) · ${opacityPercent}%${isChanged ? ' ✦' : ''}
                                 </span>
                             </div>
                             ${pickerHtml}
@@ -644,8 +806,8 @@
                     const changedColors = Object.keys(pendingColors).length;
                     document.getElementById('coordStatus').textContent =
                         changedColors > 0
-                            ? `🎨 Изменено цветов: ${changedColors}. Не забудьте сохранить`
-                            : `✓ ${positions.length} узлов. Клик по имени — смена цвета`;
+                            ? `🎨 Изменено узлов: ${changedColors}. Не забудьте сохранить`
+                            : `✓ ${positions.length} узлов. Клик по имени — цвет и прозрачность`;
                     document.getElementById('coordStatus').style.color =
                         changedColors > 0 ? '#ffd54f' : '#aaa';
                 }
@@ -657,7 +819,7 @@
         }
 
         // ============================================================
-        //  РАБОТА С ЦВЕТОМ
+        //  РАБОТА С ЦВЕТОМ И ПРОЗРАЧНОСТЬЮ
         // ============================================================
         function openColorPickerByIndex(index) {
             const graphDiv = document.querySelector('.plotly-graph-div');
@@ -665,8 +827,6 @@
             const positions = getNodeCoordinates(graphDiv);
             const node = positions.find(p => p.index === index);
             if (!node) return;
-            // toggle: если открыта для этого узла — оставляем (пользователь мог повторно кликнуть);
-            // если для другого — переключаем на новый
             colorPickerOpenFor = node.label;
             updateCoordinates();
         }
@@ -676,13 +836,21 @@
             updateCoordinates();
         }
 
+        /** Предпросмотр цвета (без сохранения в pending) */
         function onColorInput(index, color) {
-            // предпросмотр без сохранения: узел + исходящие линии + точка в панели
-            applyNodeColorByIndex(index, color, /*persist=*/false);
-            const dot = document.querySelector(`.coord-color-dot[data-dot-index="${index}"]`);
-            if (dot) dot.style.background = color;
+            const graphDiv = document.querySelector('.plotly-graph-div');
+            if (!graphDiv) return;
+            const positions = getNodeCoordinates(graphDiv);
+            const node = positions.find(p => p.index === index);
+            if (!node) return;
+
+            // берём текущую прозрачность (pending/server/1)
+            const curOpacity = getCurrentOpacityForLabel(node.label);
+            applyNodeAppearanceByIndex(index, color, curOpacity);
+            updateInlinePreview(index, color, curOpacity);
         }
 
+        /** Фиксация цвета в pending */
         function onColorChange(index, color) {
             const graphDiv = document.querySelector('.plotly-graph-div');
             if (!graphDiv) return;
@@ -690,62 +858,134 @@
             const node = positions.find(p => p.index === index);
             if (!node) return;
 
-            // фиксируем выбранный цвет как pending
-            pendingColors[node.label] = color;
+            const curOpacity = getCurrentOpacityForLabel(node.label);
+            pendingColors[node.label] = { color: color, opacity: curOpacity };
 
-            // применяем окончательно (узел + линии)
-            applyNodeColorByIndex(index, color, /*persist=*/true);
-
-            // ВАЖНО: палитру НЕ закрываем — пользователь может подбирать цвет многократно
-            // (закрытие — только по кнопке ✕)
-
-            // автообновление отключаем (однократно — disableAutoRefresh сам покажет сообщение)
+            applyNodeAppearanceByIndex(index, color, curOpacity);
             disableAutoRefresh('изменён цвет узла');
-
-            // обновляем панель (точки, статус)
             updateCoordinates();
         }
 
+        /** Предпросмотр прозрачности */
+        function onOpacityInput(index, value) {
+            const graphDiv = document.querySelector('.plotly-graph-div');
+            if (!graphDiv) return;
+            const positions = getNodeCoordinates(graphDiv);
+            const node = positions.find(p => p.index === index);
+            if (!node) return;
+
+            const opacity = clamp01(parseInt(value, 10) / 100);
+            const curColor = getCurrentColorForLabel(node.label);
+
+            // мгновенно обновляем подпись %
+            const valEl = document.querySelector(`[data-opacity-val="${index}"]`);
+            if (valEl) valEl.textContent = Math.round(opacity * 100) + '%';
+
+            applyNodeAppearanceByIndex(index, curColor, opacity);
+            updateInlinePreview(index, curColor, opacity);
+        }
+
+        /** Фиксация прозрачности в pending */
+        function onOpacityChange(index, value) {
+            const graphDiv = document.querySelector('.plotly-graph-div');
+            if (!graphDiv) return;
+            const positions = getNodeCoordinates(graphDiv);
+            const node = positions.find(p => p.index === index);
+            if (!node) return;
+
+            const opacity = clamp01(parseInt(value, 10) / 100);
+            const curColor = getCurrentColorForLabel(node.label);
+
+            pendingColors[node.label] = { color: curColor, opacity: opacity };
+
+            applyNodeAppearanceByIndex(index, curColor, opacity);
+            disableAutoRefresh('изменена прозрачность узла');
+            updateCoordinates();
+        }
+
+        function clamp01(v) {
+            if (isNaN(v)) return 1;
+            return Math.max(0, Math.min(1, v));
+        }
+
+        /** Текущая прозрачность для узла по label (pending → server → 1) */
+        function getCurrentOpacityForLabel(label) {
+            if (pendingColors[label]) {
+                const st = normalizeStyle(pendingColors[label]);
+                return st.opacity;
+            }
+            if (serverColors[label]) {
+                const st = normalizeStyle(serverColors[label]);
+                return st.opacity;
+            }
+            return 1;
+        }
+
+        /** Текущий цвет для узла по label (pending → server → #888888) */
+        function getCurrentColorForLabel(label) {
+            if (pendingColors[label]) {
+                const st = normalizeStyle(pendingColors[label]);
+                return st.color;
+            }
+            if (serverColors[label]) {
+                const st = normalizeStyle(serverColors[label]);
+                return st.color;
+            }
+            return '#888888';
+        }
+
+        /** Обновить мини-превью и точку в панели без перерисовки всего списка */
+        function updateInlinePreview(index, color, opacity) {
+            const preview = document.querySelector(`[data-preview-index="${index}"]`);
+            if (preview) {
+                preview.style.backgroundColor = hexToRgba(color, opacity);
+            }
+            const dot = document.querySelector(`.coord-color-dot[data-dot-index="${index}"]`);
+            if (dot) {
+                dot.style.background = hexToRgba(color, opacity);
+            }
+        }
+
+        // ============================================================
+        //  ПРИМЕНЕНИЕ ВНЕШНЕГО ВИДА УЗЛА (цвет + прозрачность)
+        // ============================================================
         /**
-         * Перекрашивает узел (node.color[index]) и все исходящие от него линии
-         * (link.color для связей с source === index).
+         * Перекрашивает узел и все исходящие от него линии с учётом прозрачности.
          *
          * @param {number} index — индекс узла
          * @param {string} color — '#rrggbb'
+         * @param {number} opacity — 0..1
          */
-        function applyNodeColorByIndex(index, color) {
+        function applyNodeAppearanceByIndex(index, color, opacity) {
             const graphDiv = document.querySelector('.plotly-graph-div');
             if (!graphDiv || typeof Plotly === 'undefined') return;
 
             try {
                 const positions = getNodeCoordinates(graphDiv);
                 const nodeCount = positions.length;
+                const rgba = hexToRgba(color, opacity);
 
                 // 1) цвета узлов
                 const nodeColors = getNodeColors(graphDiv).slice();
                 while (nodeColors.length < nodeCount) nodeColors.push('#888888');
-                nodeColors[index] = color;
+                nodeColors[index] = rgba;
 
-                // 2) цвета линий — перекрашиваем только исходящие от index
+                // 2) цвета линий — исходящие от index
                 const sources = getLinkSourceArray(graphDiv);
                 let linkColors = getLinkColors(graphDiv);
 
                 if (linkColors && linkColors.length === sources.length) {
-                    // копия, чтобы не мутировать исходный массив
                     linkColors = linkColors.slice();
                     for (let i = 0; i < sources.length; i++) {
                         if (sources[i] === index) {
-                            linkColors[i] = color;
+                            linkColors[i] = rgba;
                         }
                     }
                 } else {
-                    // если link.color не задан как массив — сформируем массив
-                    // на основе текущих цветов узлов-источников
-                    const fallbackNodeColors = nodeColors;
+                    // если link.color не задан как массив — формируем массив
                     linkColors = sources.map(srcIdx => {
-                        return (srcIdx === index)
-                            ? color
-                            : (fallbackNodeColors[srcIdx] || '#cccccc');
+                        if (srcIdx === index) return rgba;
+                        return (nodeColors[srcIdx] || '#cccccc');
                     });
                 }
 
@@ -755,7 +995,7 @@
                 }, [0]);
 
             } catch (e) {
-                console.warn('Не удалось применить цвет:', e);
+                console.warn('Не удалось применить цвет/прозрачность:', e);
             }
         }
 
@@ -788,8 +1028,6 @@
             graphDiv.on('plotly_relayout', graphDiv._sankeyDragHandler);
 
             graphDiv._sankeyAfterPlotHandler = function() {
-                // Если открыта палитра — не перерисовываем панель,
-                // иначе input[type=color] потеряет фокус при relayout/restyle
                 if (showCoords && !colorPickerOpenFor) {
                     setTimeout(updateCoordinates, 150);
                 }
@@ -835,7 +1073,6 @@
                                 Plotly.Plots.resize(graphDiv);
                                 setupNodeDragHandler(graphDiv);
 
-                                // цвета, встроенные сервером в диаграмму
                                 serverColors = readServerColorsFromGraph();
 
                                 setTimeout(() => {
@@ -878,7 +1115,7 @@
         }
 
         // ============================================================
-        //  СОХРАНЕНИЕ ПОЗИЦИЙ И ЦВЕТОВ
+        //  СОХРАНЕНИЕ ПОЗИЦИЙ, ЦВЕТОВ И ПРОЗРАЧНОСТИ
         // ============================================================
         function saveNodePositions() {
             const graphDiv = document.querySelector('.plotly-graph-div');
@@ -896,15 +1133,43 @@
 
                 const actualColors = getNodeColors(graphDiv);
                 const positionData = {};
+
                 positions.forEach((p, i) => {
-                    const color = pendingColors[p.label]
-                        || serverColors[p.label]
-                        || actualColors[i]
-                        || '#888888';
+                    // Определяем цвет и прозрачность
+                    let color, opacity;
+                    if (pendingColors[p.label]) {
+                        const st = normalizeStyle(pendingColors[p.label]);
+                        color = st.color;
+                        opacity = st.opacity;
+                    } else if (serverColors[p.label]) {
+                        const st = normalizeStyle(serverColors[p.label]);
+                        color = st.color;
+                        opacity = st.opacity;
+                    } else {
+                        const raw = actualColors[i] || '#888888';
+                        if (typeof raw === 'string' && raw.startsWith('rgba')) {
+                            const m = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\)/);
+                            if (m) {
+                                const r = parseInt(m[1]).toString(16).padStart(2, '0');
+                                const g = parseInt(m[2]).toString(16).padStart(2, '0');
+                                const b = parseInt(m[3]).toString(16).padStart(2, '0');
+                                color = `#${r}${g}${b}`;
+                                opacity = (m[4] !== undefined) ? parseFloat(m[4]) : 1;
+                            } else {
+                                color = raw;
+                                opacity = 1;
+                            }
+                        } else {
+                            color = raw;
+                            opacity = 1;
+                        }
+                    }
+
                     positionData[p.label] = {
                         x: Math.round(p.x * 100) / 100,
                         y: Math.round(p.y * 100) / 100,
-                        color: color
+                        color: color,
+                        opacity: opacity
                     };
                 });
 
@@ -918,7 +1183,7 @@
                         if (response.success) {
                             serverColors = Object.assign({}, serverColors, pendingColors);
                             pendingColors = {};
-                            showMessage(`✅ Позиции и цвета для '${zoneType}' сохранены!`, 'success');
+                            showMessage(`✅ Позиции, цвета и прозрачность для '${zoneType}' сохранены!`, 'success');
                             if (showCoords) updateCoordinates();
                         } else {
                             showMessage('❌ Ошибка сохранения: ' + (response.error || 'Неизвестная ошибка'), 'error');

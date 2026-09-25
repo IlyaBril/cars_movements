@@ -43,20 +43,31 @@ class SankeyService:
         return sucsess, saved
 
     def get_positions_colors_from_obj(self, zone_names, zone_type):
-        node_positions = []
+        node_position_x = []
+        node_position_y = []
         node_colors = []
 
         report = self.get_zone_attributes(zone_type)
         zones_by_name = {z.name: z for z in report.report_zones}
-        logger.info(f'{__name__} zones_by_name {zones_by_name} \n zone_names {zone_names}')
+
+        logger.info(f'zones_by_name {zones_by_name} \n zone_names {zone_names}')
+
         for zone_name in zone_names:
             zone = zones_by_name.get(zone_name)
 
-            if zone is None or (zone.x or zone.y or zone.color is None):
-                node_positions.append([
-                    random.uniform(0.1, 0.9),
-                    random.uniform(0.1, 0.9),
-                ])
+            logger.info(f'\n zone attributes'
+                        f'\n name {zone.name}'
+                        f'\n x {zone.x} y {zone.y}'
+                        f'\n color {zone.color}'
+                        )
+
+            if zone is None or any(v is None for v in (zone.x, zone.y, zone.color)):
+                node_position_x.append(
+                    random.uniform(0.1, 0.9)
+                    )
+                node_position_y.append(
+                    random.uniform(0.1, 0.9)
+                )
                 node_colors.append(
                     f'rgba({random.randint(100, 200)}, '
                     f'{random.randint(100, 200)}, '
@@ -68,12 +79,26 @@ class SankeyService:
                 )
 
             else:
-                node_positions.append([zone.x, zone.y])
+                node_position_x.append(zone.x)
+                node_position_y.append(zone.y)
                 node_colors.append(zone.color)
             logger.info(f"Зона '{zone_name}' positions x {zone.x} y {zone.y} color {zone.color}")                   
                    
-        return node_positions, node_colors   
-    
+        return node_position_x, node_position_y, node_colors   
+
+def get_position(zone):
+    if zone is None or (zone.x or zone.y or zone.color is None):
+        node_position_x = random.uniform(0.1, 0.9)
+        node_position_y = random.uniform(0.1, 0.9),
+        node_color = (f'rgba({random.randint(100, 200)}, '
+                      f'{random.randint(100, 200)}, '
+                      f'{random.randint(100, 200)}, 0.8)'
+                      )
+    else:
+        node_positions_x = zone.x
+        node_position_y = zone.y
+        node_color = zone.color
+    return node_position_x, node_position_y, node_color
     
 def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dict:
     """
@@ -107,7 +132,6 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
     # Считаем входы и выходы: {'Москва': 2, 'Питер': 2, 'Казань': 1}
     out_stats = df_exit['Точка регистрации'].value_counts().to_dict()
     in_stats = df_enter['Точка регистрации'].value_counts().to_dict()
-    logger.info(f'{__name__} in_stats {in_stats} \n out_stats {out_stats}')
 
     # Получаем все уникальные зоны
     all_zones = set(transition_counts['Точка регистрации']) | set(transition_counts['next_zone'])
@@ -125,16 +149,16 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
 
     # Сразу собираем плоские списки для go.Sankey.link
     sources, targets, values = [], [], []
+    node_positions = []
+    node_colors = []
     for _, row in transition_counts.iterrows():
         src, dst = row['Точка регистрации'], row['next_zone']
         if src in node_to_index and dst in node_to_index:
             sources.append(node_to_index[src])
             targets.append(node_to_index[dst])
-            values.append(row['count'])
+            values.append(row['count'])           
 
-    logger.info(f'{__name__} sources {sources} targets {targets} values {values}')
-
-    sankey_data = {
+        sankey_data = {
         'zone_names':  zone_names,
         'node_labels': node_labels,
         'sources':     sources,
@@ -231,7 +255,9 @@ def create_sankey_chart(
     ) -> go.Figure:
 
     sankey_data = prepare_sankey_data(df, date, allowed_zones)
-    logger.info(f'{__name__} sankey_data {sankey_data}')
+
+    logger.info(f'\n call prepare_sankey_data'
+                 f'\n sankey_data {sankey_data}')
     #{
     #   'zone_names': zone_names,      # для get_positions_colors_from_obj
     #   'node_labels': node_labels,    # для node.label
@@ -259,7 +285,13 @@ def create_sankey_chart(
     # Определяем позиции и цвета для каждой зоны
     service = SankeyService()
     with service:
-        node_positions, node_colors = service.get_positions_colors_from_obj(zone_names, zone_type)
+        node_position_x, node_position_y, node_colors = service.get_positions_colors_from_obj(
+            zone_names, zone_type)
+
+    logger.info(f'\n call get_positions_colors'
+                 f'\n node_position_x {node_position_x}'
+                 f'\n node_position_y {node_position_y}'
+                 f'\n node_colors {node_colors}')
 
     # Цвета для связей
     link_colors = get_link_colors(sources, node_colors, opacity=0.4)
@@ -271,8 +303,8 @@ def create_sankey_chart(
             line=dict(color="black", width=0.5),
             label=node_labels,
             color=node_colors,
-            x=[pos[0] for pos in node_positions],
-            y=[pos[1] for pos in node_positions],
+            x=node_position_x,
+            y=node_position_y,
         ),
         link=dict(
             source=sources,
