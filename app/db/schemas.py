@@ -1,8 +1,9 @@
-from marshmallow import Schema, fields, post_load
+from marshmallow import Schema, fields, post_load, pre_load
 from datetime import datetime
 from typing import Dict, Optional
 from pydantic import BaseModel, Field, field_validator
 import re
+
 
 class MovementSchema(Schema):
 
@@ -18,7 +19,14 @@ class MovementSchema(Schema):
         attribute="Точка_регистрации",
         )
     Номер = fields.Int(allow_none=True)
+    VehicleModel = fields.Str(required=False, allow_none=True)
 
+    @pre_load
+    def clean_vehicle_model(self, data, **kwargs):
+        v = data.get('VehicleModel')
+        if v is None or v != v:      # v != v только для NaN
+            data['VehicleModel'] = None
+        return data
 
 
 class NodeLayoutItem(BaseModel):

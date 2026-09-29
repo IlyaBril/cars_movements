@@ -32,12 +32,13 @@ class GifService:
         target_date: date,
     ) -> dict:
         """Подготовка данных Sankey для конкретного момента времени"""
-        df_enter = df[df['Дата'] <= current_time].copy()
-        df_exit = df[df['exit_time'] <= current_time].copy()
-        
+
         df_enter = df_enter[df_enter['Дата'].dt.date == target_date].copy()
         df_exit = df_exit[df_exit['exit_time'].dt.date == target_date].copy()
-        
+
+        df_enter = df[df['Дата'] <= current_time].copy()
+        df_exit = df[df['exit_time'] <= current_time].copy()
+              
         df_transitions = df_exit.sort_values(['Заказ', 'exit_time'])
         transition_counts = (df_transitions
                             .groupby(['Точка регистрации', 'next_zone'])
@@ -88,6 +89,7 @@ class GifService:
         interval_minutes: int = 30
     ) -> tuple:
         """Получение снимков с однократной загрузкой данных"""
+
         target_date = pd.Timestamp(date).date()
         
         # Загрузка данных
@@ -133,6 +135,7 @@ class GifService:
         max_frames: int = 24
     ) -> Optional[str]:
         """Создает GIF-отчет динамики движения"""
+
         snapshots, allowed_zones = self.get_hourly_snapshots_optimized(
             date, zone_type, interval_minutes
         )

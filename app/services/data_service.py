@@ -222,29 +222,31 @@ class DataService:
             df = pd.read_excel(
                 BytesIO(file_content),
                 sheet_name=0,
-                usecols=['Номер', 'Дата', 'Заказ', 'Точка регистрации']
+                usecols=['Номер', 'Дата', 'Заказ', 'Точка регистрации', 'VehicleModel']
                 )
             df['Дата'] = pd.to_datetime(df['Дата'], format='%d.%m.%Y %H:%M:%S')
+            df = df.where(pd.notnull(df), None)
+            logger.info(f'notnull {df.dtypes} \n modified {df}')
 
-            print(df)
             schema = MovementSchema(many=True)
-            logger.info(f'{__name__} pd.read_excel done')
+            logger.info(f'pd.read_excel done')
             
             validated_data = schema.load(df.to_dict('records'))
 
-            logger.info(f'{__name__} data validation pass ok')
+            logger.info(f'data validation pass ok')
         
             try:
-                result, msg, added = self._movement_repo.load_from_excel_to_db(validated_data)
-                logger.info(f'{__name__} _movement_repo.load_from_excel_to_db ok {result} , {msg} , {added}')
+                result, msg, added = self._movement_repo.load_from_excel_to_db(
+                    validated_data)
+                logger.info(f'movement_repo.load_from_excel_to_db ok {result} , {msg} , {added}')
                 return result, msg, added
             except Exception as e:
                 # Логируем полную ошибку с traceback
-                logger.error(f'{__name__} Error in load_from_excel_to_db: {str(e)}', exc_info=True)
+                logger.error(f'Error in load_from_excel_to_db: {str(e)}', exc_info=True)
                 return False, f"Ошибка при сохранении в БД: {str(e)}", 0
             
         except Exception as e:
-            logger.error(f'{__name__} Unexpected error: {str(e)}', exc_info=True)
+            logger.error(f'Unexpected error: {str(e)}', exc_info=True)
             return False, f"Ошибка: {str(e)}", 0
 
     def export_to_excel(self) -> Optional[bytes]:

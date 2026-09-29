@@ -41,6 +41,14 @@ class MovementRepository:
         response = self.session.execute(stmt).scalars().all()
         return response
 
+    def get_column_filters(self, list: column = 'VehicleModel') -> dict[list]:
+        """Получение уникальных списков по переданной колонке"""
+        orders_query = self.session.query(Movement.VehicleModel).distinct()
+        unique_values = orders_query.all()
+        # Извлекаем номера заказов
+        values = [unique_value[0] for unique_value in unique_values ]
+        return values
+    
     #Reports
     def get_dash_zones_repo(self) -> list[ZoneReport]:
         """Получение всех объектов отчетов"""
@@ -196,7 +204,7 @@ class MovementRepository:
             if date:
                 orders_query = self.session.query(Movement.Заказ).filter(
                     func.date(Movement.Дата) == date,
-                    #Movement.Точка_регистрации == "M151. Выход с линии DKD+"
+                    Movement.VehicleModel == "M3"
                     ).distinct()
 
                 orders = orders_query.all()
@@ -275,7 +283,8 @@ class MovementRepository:
                     Номер=row['Номер'],
                     Дата=row['Дата'],
                     Заказ=row['Заказ'],
-                    Точка_регистрации=row['Точка регистрации']
+                    Точка_регистрации=row['Точка регистрации'],
+                    VehicleModel=row['VehicleModel']
                 )
                 movements.append(movement)
             

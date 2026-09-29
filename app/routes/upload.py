@@ -39,15 +39,15 @@ async def upload_excel(file: UploadFile = File(...)):
                 detail="Поддерживаются только .xlsx и .xls файлы"
             )
 
-        logger.info(f'{__name__} before async with file')
         
         file_content = await file.read()
         service = DataService()
 		
-        logger.info(f'{__name__} file uploaded. ')
+        logger.info(f'file uploaded. ')
 
         # Загружаем данные
-        success, message, added_count = service.load_from_excel(file_content)
+        with service:
+            success, message, added_count = service.load_from_excel(file_content)
 
         if not success:
             # Если ошибка валидации - возвращаем 400

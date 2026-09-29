@@ -29,6 +29,7 @@ class Movement(Base):
     Дата = Column(DateTime)
     Заказ = Column(String)
     Точка_регистрации = Column(String, name="Точка регистрации")
+    VehicleModel = Column(String, nullable=True)
 
 
 class ZoneReport(Base):
