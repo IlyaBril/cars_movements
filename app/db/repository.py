@@ -41,7 +41,7 @@ class MovementRepository:
         response = self.session.execute(stmt).scalars().all()
         return response
 
-    def get_column_filters(self, list: column = 'VehicleModel') -> dict[list]:
+    def get_column_filters(self, column = 'VehicleModel') -> dict[list]:
         """Получение уникальных списков по переданной колонке"""
         orders_query = self.session.query(Movement.VehicleModel).distinct()
         unique_values = orders_query.all()
@@ -204,7 +204,7 @@ class MovementRepository:
             if date:
                 orders_query = self.session.query(Movement.Заказ).filter(
                     func.date(Movement.Дата) == date,
-                    Movement.VehicleModel == "M3"
+                    #Movement.VehicleModel == "M3"
                     ).distinct()
 
                 orders = orders_query.all()

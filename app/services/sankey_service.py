@@ -100,20 +100,34 @@ def get_position(zone):
         node_color = zone.color
     return node_position_x, node_position_y, node_color
     
-def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dict:
+def prepare_sankey_data(df: pd.DataFrame,
+                        date: str,
+                        allowed_zones: list,
+                        current_time: datetime = None
+                        ) -> dict:
     """
     df - таблица, фильтрованная по условию: если есть движение VIN в этот день,
     выгружаем все движения по этому VIN за все дни.
     allowed_zones - Точки регистрации, для которых нужно построить sankey диаграмму
     """
+    
     # Фильтрация по дате отчета
     target_date = pd.Timestamp(date).date()
 
     # Подготовка DataFrame для подсчета входа и выхода.
     # Вход в Точку регистрации происходит во время регистрации этой точки,
     # выход — во время регистрации следующей точки.
-    df_enter = df[df['Дата'].dt.date == target_date]
-    df_exit = df[df['exit_time'].dt.date == target_date]
+
+    if current_time:
+        df_enter = df[df['Дата'] <= current_time].copy()
+        df_exit = df[df['exit_time'] <= current_time].copy()
+        
+        df_enter = df_enter[df_enter['Дата'].dt.date == target_date].copy()
+        df_exit = df_exit[df_exit['exit_time'].dt.date == target_date].copy()
+
+    else:
+        df_enter = df[df['Дата'].dt.date == target_date]
+        df_exit = df[df['exit_time'].dt.date == target_date]
 
     # Подсчет количества переходов между точками за день.
     # Фильтрация происходит по df_exit, т.к. выход из текущей точки в следующую
@@ -158,7 +172,7 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
             targets.append(node_to_index[dst])
             values.append(row['count'])           
 
-        sankey_data = {
+    sankey_data = {
         'zone_names':  zone_names,
         'node_labels': node_labels,
         'sources':     sources,
@@ -166,6 +180,8 @@ def prepare_sankey_data(df: pd.DataFrame, date: str, allowed_zones: list) -> dic
         'values':      values,
         'message':     None,
     }
+
+    logger.info(f'sankey data check {sankey_data}')
     # ============ КАЛИБРОВКА ============
     if ENABLE_CALIBRATION:
         sankey_data = add_calibration_node(sankey_data, calibration_value=500)
@@ -215,7 +231,6 @@ def get_link_colors(sources: list, node_colors: list, opacity: float = 0.4) -> l
     return link_colors
 
 
-# ============ НОВАЯ ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ КАЛИБРОВКИ ============
 def add_calibration_node(sankey_data: dict, calibration_value: int = 400) -> dict:
     """
     Добавляет калибровочный узел и связь для фиксации масштаба диаграммы.
@@ -223,8 +238,6 @@ def add_calibration_node(sankey_data: dict, calibration_value: int = 400) -> dic
     """
     if not sankey_data['values']:
         return sankey_data
-
-    logger.info(f'{__name__} before calibration: {sankey_data}')
 
     result = {
         'zone_names':  ['calibration'] + sankey_data['zone_names'],
@@ -242,9 +255,7 @@ def add_calibration_node(sankey_data: dict, calibration_value: int = 400) -> dic
         result['targets'].append(1)
         result['values'].append(calibration_value)
 
-    logger.info(f'{__name__} after calibration: {result}')
     return result
-# ================================================================
 
 
 def create_sankey_chart(
@@ -257,15 +268,7 @@ def create_sankey_chart(
     sankey_data = prepare_sankey_data(df, date, allowed_zones)
 
     logger.info(f'\n call prepare_sankey_data'
-                 f'\n sankey_data {sankey_data}')
-    #{
-    #   'zone_names': zone_names,      # для get_positions_colors_from_obj
-    #   'node_labels': node_labels,    # для node.label
-    #   'sources': sources,            # для link.source
-    #   'targets': targets,            # для link.target
-    #   'values': values,              # для link.value
-    #   'message': None,
-    #}
+                f'\n sankey_data {sankey_data}')
     
     # Пустая диаграмма, если нет связей
     if not sankey_data['values']:
@@ -287,11 +290,6 @@ def create_sankey_chart(
     with service:
         node_position_x, node_position_y, node_colors = service.get_positions_colors_from_obj(
             zone_names, zone_type)
-
-    logger.info(f'\n call get_positions_colors'
-                 f'\n node_position_x {node_position_x}'
-                 f'\n node_position_y {node_position_y}'
-                 f'\n node_colors {node_colors}')
 
     # Цвета для связей
     link_colors = get_link_colors(sources, node_colors, opacity=0.4)
