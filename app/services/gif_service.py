@@ -39,8 +39,10 @@ class GifService:
             zone_to_group, allowed_zones = self.data_service._prepare_zones_and_mapping(zone_type, df)
             df_transformed = self.data_service._transform_dataframe(df, zone_to_group)
         
-        start_time = datetime.combine(target_date, datetime.min.time().replace(hour=6))
-        end_time = datetime.combine(target_date, datetime.min.time().replace(hour=23, minute=59))
+        start_time = datetime.combine(
+            target_date, datetime.min.time().replace(hour=6))
+        end_time = datetime.combine(
+            target_date, datetime.min.time().replace(hour=23, minute=59))
         
         snapshots = []
         current_time = start_time

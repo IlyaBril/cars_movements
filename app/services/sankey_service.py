@@ -316,3 +316,113 @@ def create_sankey_chart(
         autosize=True, width=None, height=400, margin=dict(l=20, r=20, t=60, b=20)
     )
     return fig
+
+
+def create_snapshot_figure(
+        snapshot: dict, 
+        date: str, 
+        zone_type: str,
+        allowed_zones: list,
+        frame_index: int,
+        total_frames: int
+    ) -> go.Figure:
+        """Создает фигуру Plotly для отдельного снимка"""
+        import random
+        
+        sankey_data = snapshot['sankey_data']
+        time_label = snapshot['time']
+        total_flow = snapshot.get('total_flow', 0)
+
+        logger.info(f' node_labels {sankey_data['node_labels']}')
+        
+        if not sankey_data.get('node_labels'):# or not sankey_data.get('links'):
+            fig = go.Figure()
+            fig.update_layout(
+                title={
+                    'text': f'Динамика движения<br>{date} {time_label}<br>Нет данных',
+                    'y': 0.5,
+                    'x': 0.5
+                },
+                height=500,
+                annotations=[
+                    dict(
+                        text=f'Прогресс: {frame_index + 1}/{total_frames}',
+                        x=0.5,
+                        y=0.02,
+                        xref='paper',
+                        yref='paper',
+                        showarrow=False,
+                        font=dict(size=12, color='gray')
+                    )
+                ]
+            )
+            return fig
+            
+        node_labels = sankey_data['node_labels']
+        zone_names  = sankey_data['zone_names']
+        sources     = sankey_data['sources']
+        targets     = sankey_data['targets']
+        values      = sankey_data['values']
+
+        # Определяем позиции и цвета для каждой зоны
+        service = SankeyService()
+        with service:
+            node_position_x, node_position_y, node_colors = service.get_positions_colors_from_obj(
+                zone_names, zone_type)
+
+        logger.info(f'\n call get_positions_colors'
+                    f'\n node_position_x {node_position_x}'
+                    f'\n node_position_y {node_position_y}'
+                    f'\n node_colors {node_colors}')
+            
+        link_colors = get_link_colors(sources, node_colors, opacity=0.4)
+
+        logger.info(f'Prepare sankey with sankey_data \n {sankey_data}')
+        
+        fig = go.Figure(data=[go.Sankey(
+            node=dict(
+                pad=15,
+                thickness=10,
+                line=dict(color="black", width=0.5),
+                label=node_labels,
+                color=node_colors,
+                x=node_position_x,
+                y=node_position_y,
+            ),
+            link=dict(
+                source=sources,
+                target=targets,
+                value=values,
+                color=link_colors,
+            ),
+        )])
+        
+        fig.update_layout(
+            title={
+                'text': f'Динамика движения<br>{date} {time_label}',
+                'y': 0.95,
+                'x': 0.5,
+                'xanchor': 'center',
+                'yanchor': 'top',
+                'font': dict(size=16)
+            },
+            annotations=[
+                dict(
+                    text=f'Всего переходов: {total_flow}  |  Кадр {frame_index + 1}/{total_frames}',
+                    x=0.5,
+                    y=0.02,
+                    xref='paper',
+                    yref='paper',
+                    showarrow=False,
+                    font=dict(size=14, color='#333')
+                )
+            ],
+            autosize=True,
+            width=None,
+            height=500,
+            margin=dict(l=20, r=20, t=80, b=40),
+            plot_bgcolor='white',
+            paper_bgcolor='white'
+        )
+        
+        return fig

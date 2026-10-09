@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import FileResponse
 from app.services.gif_service import GifService
 from app.services.data_service import DataService
-from app.services.sankey_service import SankeyService, prepare_sankey_data, get_link_colors, add_calibration_node, create_sankey_chart
+from app.services.sankey_service import SankeyService, create_snapshot_figure, prepare_sankey_data, get_link_colors, add_calibration_node, create_sankey_chart
 from app.db.schemas import NodeLayoutItem, SavePositionsResponse
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,30 @@ async def get_sankey_chart(
             if df.empty:
                 return HTMLResponse(content="<h3>Нет данных за выбранную дату</h3>")
 
-        fig = create_sankey_chart(df, date, allowed_zones, zone_type)
+        sankey_data = prepare_sankey_data(df, date, allowed_zones)
+
+        target_date = pd.Timestamp(date).date()
+        current_time = datetime.combine(
+            target_date, datetime.min.time().replace(hour=23, minute=59))
+
+
+
+        snapshot = {
+                'time': current_time.strftime("%H:%M"),
+                'sankey_data': sankey_data,
+                'total_flow': 1,
+                'nodes_count': 1,
+            }
+        #fig = create_sankey_chart(df, date, allowed_zones, zone_type)
+        fig = create_snapshot_figure(
+            snapshot,
+            date,
+            zone_type,
+            allowed_zones,
+            1,
+            1,
+            )
+      
         content = fig.to_html(
             full_html=False,
             include_plotlyjs=True,
@@ -149,3 +172,4 @@ async def get_sankey_gif(
             status_code=500,
             content={"error": f"Ошибка: {str(e)}"}
         )
+
