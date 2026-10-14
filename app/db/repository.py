@@ -1,9 +1,7 @@
 import json
 import pandas as pd
 import logging
-from datetime import datetime
-from fastapi import Depends
-from typing import List, Tuple, Dict, Optional, Annotated
+from typing import List, Tuple, Dict, Optional
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import distinct, select
 from sqlalchemy import func
@@ -11,11 +9,8 @@ from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import SQLAlchemyError
 from typing import Tuple
 
-from .database import SQLiteSession, get_sqlite_session
 from .models import (
     Movement,
-    ZoneGroup,
-    ZonesList,
     ZoneWithGroup,
     ZoneReport
 )
@@ -186,7 +181,7 @@ class MovementRepository:
         """Удаление группы"""
         try:
             group = self.session.query(
-                ZonesWithGroup).filter_by(name=group_name).first()
+                ZoneWithGroup).filter_by(name=group_name).first()
             if group:
                 self.session.delete(group)
                 self.session.commit()

@@ -19,19 +19,18 @@ class SankeyService:
     """Сервис для подготовки данных Sankey диаграммы"""
     
     def __init__(self):
-        self._sqlite_sesion = SQLiteSession()
-        self._movement_repo = MovementRepository(self._sqlite_sesion)
+        self._sqlite_session = SQLiteSession()
+        self._movement_repo = MovementRepository(self._sqlite_session)
 		
     def __enter__(self):
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self._sqlite_sesion.close()
+        self._sqlite_session.close()
 
     def get_zone_attributes(self, group_name):
         zone_attributes = self._movement_repo.get_zone_attributes(group_name)       
         return zone_attributes
-
 
     def save_colors_positions(self, zone_type, positions):
         positions = {
@@ -48,6 +47,7 @@ class SankeyService:
         node_colors = []
 
         report = self.get_zone_attributes(zone_type)
+        logger.info(f'zone_types {report.report_zones}')
         zones_by_name = {z.name: z for z in report.report_zones}
 
         logger.info(f'zones_by_name {zones_by_name} \n zone_names {zone_names}')
@@ -55,13 +55,14 @@ class SankeyService:
         for zone_name in zone_names:
             zone = zones_by_name.get(zone_name)
 
-            logger.info(f'\n zone attributes'
-                        f'\n name {zone.name}'
-                        f'\n x {zone.x} y {zone.y}'
-                        f'\n color {zone.color}'
-                        )
+            if zone is not None and all(v is not None for v in (zone.x, zone.y, zone.color)):
+                node_position_x.append(zone.x)
+                node_position_y.append(zone.y)
+                node_colors.append(zone.color)
+                logger.info(f"Зона '{zone_name}' positions x {zone.x} y {zone.y} color {zone.color}")
 
-            if zone is None or any(v is None for v in (zone.x, zone.y, zone.color)):
+            #if zone is None or any(v is None for v in (zone.x, zone.y, zone.color)):
+            else:
                 node_position_x.append(
                     random.uniform(0.1, 0.9)
                     )
@@ -78,11 +79,7 @@ class SankeyService:
                     f"используются случайные координаты"
                 )
 
-            else:
-                node_position_x.append(zone.x)
-                node_position_y.append(zone.y)
-                node_colors.append(zone.color)
-            logger.info(f"Зона '{zone_name}' positions x {zone.x} y {zone.y} color {zone.color}")                   
+
                    
         return node_position_x, node_position_y, node_colors   
 
@@ -95,7 +92,7 @@ def get_position(zone):
                       f'{random.randint(100, 200)}, 0.8)'
                       )
     else:
-        node_positions_x = zone.x
+        node_position_x = zone.x
         node_position_y = zone.y
         node_color = zone.color
     return node_position_x, node_position_y, node_color
@@ -182,10 +179,8 @@ def prepare_sankey_data(df: pd.DataFrame,
     }
 
     logger.info(f'sankey data check {sankey_data}')
-    # ============ КАЛИБРОВКА ============
     if ENABLE_CALIBRATION:
         sankey_data = add_calibration_node(sankey_data, calibration_value=500)
-    # ====================================
 
     return sankey_data
 
