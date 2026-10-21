@@ -2,7 +2,6 @@ from fastapi import APIRouter, Request, Query
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from app.services.data_service import DataService
-from app.services.zone_service import ZoneService
 from datetime import datetime
 import logging
 
@@ -12,7 +11,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analysis"])
 templates = Jinja2Templates(directory="templates")
 
-data_service = DataService()
 
 def default_date():
     return datetime.today().strftime("%Y-%m-%d")
@@ -20,10 +18,12 @@ def default_date():
 @router.get("/")
 def root(request: Request):
     """Главная страница с интерфейсом"""
-        
+
+    data_service = DataService()
     date = default_date()
-    zone_types = data_service.get_zones_types()
-    logger.info(f'zone_types {zone_types}')
+    with data_service:
+        zone_types = data_service.get_zones_types()
+        logger.info(f'zone_types {zone_types}')
     return templates.TemplateResponse(  
         request=request, name="index(bootstrap).html",
         context={"default_date": date, "zone_types": zone_types},
@@ -37,12 +37,13 @@ def analyze_zones(
 
 ):
     """API для анализа зон"""
-    
+    data_service = DataService()
     try:
-        df = data_service.get_data(date)
-        logger.info(f'dfff {df}')
-        stats, balance = data_service.calculate_statistics(df, date, zone_type)
-        logger.info(f' stats {stats}')
+        with data_service:
+            df = data_service.get_data(date)
+            logger.info(f'dfff {df}')
+            stats, balance = data_service.calculate_statistics(df, date, zone_type)
+            logger.info(f' stats {stats}')
         result = []
         for zone_stat in stats:
             result.append({
