@@ -13,6 +13,7 @@ from app.services.gif_service import GifService
 from app.services.data_service import DataService
 from app.services.sankey_service import SankeyService, create_snapshot_figure, prepare_sankey_data, get_link_colors, add_calibration_node, create_sankey_chart
 from app.db.schemas import NodeLayoutItem, SavePositionsResponse
+from app.services.filter_parser import parse_filter, FilterParseError
 
 logger = logging.getLogger(__name__)
 
@@ -31,26 +32,37 @@ async def sankey_page(request: Request):
     data_service = DataService()
     with data_service:
         reports = data_service.get_zones_types()
-        
+        vehicle_models = data_service.get_filter_values("VehicleModel")
+        all_zones = data_service.get_filter_values("Точка_регистрации")
+
     return templates.TemplateResponse(
         request=request,
         name="sankey.html",
         context={
             "default_date": default_date(),
             "zone_types": reports,
+            "vehicle_models": vehicle_models,
+            "all_zones": all_zones,
         })
-
 
 @router.get("/sankey-chart")
 async def get_sankey_chart(
     date: str = Query(default=default_date()), 
-    zone_type: str = Query(default="main")
+    zone_type: str = Query(default="main"),
+    row_filters: str | None = Query(default=None, alias="filter")
 ):
     try:
+        filters = parse_filter(row_filters)
+    except FilterParseError as e:
+        return HTMLResponse(content=f"<h3>Некорректный фильтр: {e}</h3>", status_code=400)
+
+    
+    try:
+        
         data_service = DataService()
         logger.info(f'get sankey chart, data service done')
         with data_service:
-            df = data_service.get_data(date)       
+            df = data_service.get_data(date, filters=filters)       
             zone_to_group, allowed_zones = data_service._prepare_zones_and_mapping(zone_type, df)
             logger.info(f'get sankey chart, \n'
                         f'zone_to_group {zone_to_group} \n'

@@ -190,7 +190,6 @@
             border: 1px solid rgba(255,255,255,0.25);
             vertical-align: middle;
             margin-right: 4px;
-            /* шахматный фон для наглядности прозрачности */
             background-image:
                 linear-gradient(45deg, #444 25%, transparent 25%),
                 linear-gradient(-45deg, #444 25%, transparent 25%),
@@ -244,6 +243,25 @@
         #toggleCoordsBtn.show { display: flex !important; }
         #coordinatesDisplay.show { display: block !important; }
 
+        /* ── Мультиселекты фильтров ──────────────────────────── */
+        .filter-multiselect {
+            min-width: 170px;
+            max-width: 260px;
+            height: auto;
+            min-height: 31px;
+            font-size: 0.85rem;
+        }
+        .filter-multiselect option { padding: 2px 4px; }
+        .filter-badge {
+            display: inline-block;
+            background: #e7f1ff;
+            color: #0d6efd;
+            border-radius: 10px;
+            padding: 1px 8px;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+
         @media (max-width: 768px) {
             #coordinatesDisplay {
                 bottom: 70px;
@@ -261,6 +279,7 @@
                 font-size: 16px;
             }
             .coord-label { max-width: 110px; }
+            .filter-multiselect { min-width: 130px; max-width: 170px; }
         }
     </style>
 </head>
@@ -354,6 +373,41 @@
             </div>
         </div>
 
+        <!-- ── ФИЛЬТРЫ ─────────────────────────────────────────── -->
+        <div class="row mb-2">
+            <div class="col-12">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <label for="vehicleModelFilter" class="form-label mb-0 small fw-bold">
+                        Модель:
+                        <span class="filter-badge" id="vehicleModelCount">0</span>
+                    </label>
+                    <select id="vehicleModelFilter" class="form-select form-select-sm filter-multiselect" multiple size="1">
+                        {% for m in vehicle_models %}
+                        <option value="{{ m }}">{{ m }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <label for="zoneFilter" class="form-label mb-0 small fw-bold">
+                        Точка регистрации:
+                        <span class="filter-badge" id="zoneCount">0</span>
+                    </label>
+                    <select id="zoneFilter" class="form-select form-select-sm filter-multiselect" multiple size="1">
+                        {% for z in all_zones %}
+                        <option value="{{ z }}">{{ z }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <button class="btn btn-outline-secondary btn-sm" onclick="resetFilters()" title="Сбросить фильтры">
+                        ✕ Сбросить фильтры
+                    </button>
+
+                    <small class="text-muted" id="filterHint">
+                        Ctrl/Cmd + клик — множественный выбор. Меню раскрывается кликом.
+                    </small>
+                </div>
+            </div>
+        </div>
+
         <div id="uploadMessage" class="mb-2"></div>
 
         <div id="loadingIndicator" class="alert alert-info d-none mb-2" role="alert">
@@ -439,13 +493,80 @@
                 return { color: fallbackColor || '#888888', opacity: 1 };
             }
             if (typeof entry === 'string') {
-                // поддержка старого формата — только цвет
                 return { color: entry, opacity: 1 };
             }
             return {
                 color: entry.color || fallbackColor || '#888888',
                 opacity: (entry.opacity === undefined || entry.opacity === null) ? 1 : entry.opacity
             };
+        }
+
+        // ============================================================
+        //  ФИЛЬТРЫ
+        // ============================================================
+        /**
+         * Собирает фильтр из мультиселектов в объект {column: [values]}.
+         * Пустые списки не включаются — бэкенд воспринимает отсутствие ключа
+         * как «фильтр не применять».
+         */
+        function collectFilter() {
+            const filters = {};
+
+            const models = Array.from(
+                document.getElementById('vehicleModelFilter').selectedOptions
+            ).map(o => o.value).filter(Boolean);
+            if (models.length) filters['VehicleModel'] = models;
+
+            const zones = Array.from(
+                document.getElementById('zoneFilter').selectedOptions
+            ).map(o => o.value).filter(Boolean);
+            if (zones.length) filters['Точка_регистрации'] = zones;
+
+            return filters;
+        }
+
+        /** Обновляет бейджи-счётчики у селектов. */
+        function updateFilterBadges() {
+            const modelsCount = document.getElementById('vehicleModelFilter').selectedOptions.length;
+            const zonesCount = document.getElementById('zoneFilter').selectedOptions.length;
+            document.getElementById('vehicleModelCount').textContent = modelsCount;
+            document.getElementById('zoneCount').textContent = zonesCount;
+        }
+
+        /** Сбрасывает все фильтры и перезагружает диаграмму. */
+        function resetFilters() {
+            document.getElementById('vehicleModelFilter').selectedIndex = -1;
+            document.getElementById('zoneFilter').selectedIndex = -1;
+            updateFilterBadges();
+            loadSankeyData(true);
+        }
+
+        /** Подписывает мультиселекты на изменение и обновляет бейджи. */
+        function setupFilterListeners() {
+            const modelSel = document.getElementById('vehicleModelFilter');
+            const zoneSel = document.getElementById('zoneFilter');
+
+            [modelSel, zoneSel].forEach(sel => {
+                sel.addEventListener('change', function() {
+                    updateFilterBadges();
+                    loadSankeyData(true);
+                });
+                // Клик по option с Ctrl/Cmd работает «из коробки».
+                // Дополнительно: клик по option без модификатора — toggle,
+                // чтобы не нужно было зажимать Ctrl на тачпадах/мобильных.
+                sel.addEventListener('mousedown', function(e) {
+                    if (e.target.tagName === 'OPTION' && !e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        e.target.selected = !e.target.selected;
+                        sel.dispatchEvent(new Event('change'));
+                        // держим селект раскрытым
+                        sel.size = Math.min(Math.max(sel.options.length, 2), 8);
+                        setTimeout(() => { sel.size = 1; }, 1500);
+                    }
+                });
+            });
+
+            updateFilterBadges();
         }
 
         // ============================================================
@@ -697,7 +818,6 @@
                     const roundedX = Math.round(p.x * 100) / 100;
                     const roundedY = Math.round(p.y * 100) / 100;
 
-                    // Текущий стиль: pending → server → из графа (по умолчанию opacity=1)
                     const styleFromPending = pendingColors[p.label];
                     const styleFromServer = serverColors[p.label];
                     const fallbackColor = nodeColors[p.index] || '#888888';
@@ -712,7 +832,6 @@
                         currentColor = st.color;
                         currentOpacity = st.opacity;
                     } else {
-                        // пробуем вытащить opacity из rgba в графе
                         const raw = nodeColors[p.index];
                         if (typeof raw === 'string' && raw.startsWith('rgba')) {
                             const m = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\)/);
@@ -836,7 +955,6 @@
             updateCoordinates();
         }
 
-        /** Предпросмотр цвета (без сохранения в pending) */
         function onColorInput(index, color) {
             const graphDiv = document.querySelector('.plotly-graph-div');
             if (!graphDiv) return;
@@ -844,13 +962,11 @@
             const node = positions.find(p => p.index === index);
             if (!node) return;
 
-            // берём текущую прозрачность (pending/server/1)
             const curOpacity = getCurrentOpacityForLabel(node.label);
             applyNodeAppearanceByIndex(index, color, curOpacity);
             updateInlinePreview(index, color, curOpacity);
         }
 
-        /** Фиксация цвета в pending */
         function onColorChange(index, color) {
             const graphDiv = document.querySelector('.plotly-graph-div');
             if (!graphDiv) return;
@@ -866,7 +982,6 @@
             updateCoordinates();
         }
 
-        /** Предпросмотр прозрачности */
         function onOpacityInput(index, value) {
             const graphDiv = document.querySelector('.plotly-graph-div');
             if (!graphDiv) return;
@@ -877,7 +992,6 @@
             const opacity = clamp01(parseInt(value, 10) / 100);
             const curColor = getCurrentColorForLabel(node.label);
 
-            // мгновенно обновляем подпись %
             const valEl = document.querySelector(`[data-opacity-val="${index}"]`);
             if (valEl) valEl.textContent = Math.round(opacity * 100) + '%';
 
@@ -885,7 +999,6 @@
             updateInlinePreview(index, curColor, opacity);
         }
 
-        /** Фиксация прозрачности в pending */
         function onOpacityChange(index, value) {
             const graphDiv = document.querySelector('.plotly-graph-div');
             if (!graphDiv) return;
@@ -908,33 +1021,26 @@
             return Math.max(0, Math.min(1, v));
         }
 
-        /** Текущая прозрачность для узла по label (pending → server → 1) */
         function getCurrentOpacityForLabel(label) {
             if (pendingColors[label]) {
-                const st = normalizeStyle(pendingColors[label]);
-                return st.opacity;
+                return normalizeStyle(pendingColors[label]).opacity;
             }
             if (serverColors[label]) {
-                const st = normalizeStyle(serverColors[label]);
-                return st.opacity;
+                return normalizeStyle(serverColors[label]).opacity;
             }
             return 1;
         }
 
-        /** Текущий цвет для узла по label (pending → server → #888888) */
         function getCurrentColorForLabel(label) {
             if (pendingColors[label]) {
-                const st = normalizeStyle(pendingColors[label]);
-                return st.color;
+                return normalizeStyle(pendingColors[label]).color;
             }
             if (serverColors[label]) {
-                const st = normalizeStyle(serverColors[label]);
-                return st.color;
+                return normalizeStyle(serverColors[label]).color;
             }
             return '#888888';
         }
 
-        /** Обновить мини-превью и точку в панели без перерисовки всего списка */
         function updateInlinePreview(index, color, opacity) {
             const preview = document.querySelector(`[data-preview-index="${index}"]`);
             if (preview) {
@@ -947,15 +1053,8 @@
         }
 
         // ============================================================
-        //  ПРИМЕНЕНИЕ ВНЕШНЕГО ВИДА УЗЛА (цвет + прозрачность)
+        //  ПРИМЕНЕНИЕ ВНЕШНЕГО ВИДА УЗЛА
         // ============================================================
-        /**
-         * Перекрашивает узел и все исходящие от него линии с учётом прозрачности.
-         *
-         * @param {number} index — индекс узла
-         * @param {string} color — '#rrggbb'
-         * @param {number} opacity — 0..1
-         */
         function applyNodeAppearanceByIndex(index, color, opacity) {
             const graphDiv = document.querySelector('.plotly-graph-div');
             if (!graphDiv || typeof Plotly === 'undefined') return;
@@ -965,12 +1064,10 @@
                 const nodeCount = positions.length;
                 const rgba = hexToRgba(color, opacity);
 
-                // 1) цвета узлов
                 const nodeColors = getNodeColors(graphDiv).slice();
                 while (nodeColors.length < nodeCount) nodeColors.push('#888888');
                 nodeColors[index] = rgba;
 
-                // 2) цвета линий — исходящие от index
                 const sources = getLinkSourceArray(graphDiv);
                 let linkColors = getLinkColors(graphDiv);
 
@@ -982,7 +1079,6 @@
                         }
                     }
                 } else {
-                    // если link.color не задан как массив — формируем массив
                     linkColors = sources.map(srcIdx => {
                         if (srcIdx === index) return rgba;
                         return (nodeColors[srcIdx] || '#cccccc');
@@ -1043,19 +1139,48 @@
         }
 
         // ============================================================
+        //  СБОРКА URL С ФИЛЬТРОМ
+        // ============================================================
+        /**
+         * Формирует query-строку для запросов к /sankey-chart и /sankey-gif.
+         * Единственное место на фронте, где «живут» конкретные фильтры.
+         */
+        function buildQueryParams(extra = {}) {
+            const params = new URLSearchParams();
+
+            const date = document.getElementById('analysisDate').value;
+            if (date) params.set('date', date);
+            params.set('zone_type', currentZoneType);
+
+            const filters = collectFilter();
+            if (Object.keys(filters).length) {
+                params.set('filter', JSON.stringify(filters));
+            }
+
+            Object.entries(extra).forEach(([k, v]) => {
+                if (v !== undefined && v !== null && v !== '') {
+                    params.set(k, v);
+                }
+            });
+
+            return params.toString();
+        }
+
+        // ============================================================
         //  ЗАГРУЗКА ДАННЫХ
         // ============================================================
         function loadSankeyData(showIndicator = true) {
             const date = document.getElementById('analysisDate').value;
-            const zoneType = currentZoneType;
 
             updateTitle(date);
             if (showIndicator) showLoading();
 
             $('#chartContainer').css('visibility', 'hidden');
 
+            const url = '/sankey-chart?' + buildQueryParams();
+
             $.ajax({
-                url: `/sankey-chart?date=${date}&zone_type=${zoneType}`,
+                url: url,
                 method: 'GET',
                 success: function(data) {
                     $('#chartContent').html(data);
@@ -1104,11 +1229,14 @@
         //  GIF
         // ============================================================
         function downloadGif() {
-            const date = document.getElementById('analysisDate').value;
-            const zoneType = currentZoneType;
             const interval = document.getElementById('gifInterval').value;
             const duration = document.getElementById('gifDuration').value;
-            const url = `/sankey-gif?date=${date}&zone_type=${zoneType}&interval_minutes=${interval}&duration=${duration}&max_frames=24`;
+
+            const url = '/sankey-gif?' + buildQueryParams({
+                interval_minutes: interval,
+                duration: duration,
+                max_frames: 24,
+            });
 
             showMessage('Генерация GIF началась. Файл будет скачан автоматически', 'success');
             window.open(url, '_blank');
@@ -1135,7 +1263,6 @@
                 const positionData = {};
 
                 positions.forEach((p, i) => {
-                    // Определяем цвет и прозрачность
                     let color, opacity;
                     if (pendingColors[p.label]) {
                         const st = normalizeStyle(pendingColors[p.label]);
@@ -1208,6 +1335,8 @@
                 currentZoneType = zoneTypes[0];
                 document.getElementById('selectedZone').textContent = zoneTypes[0];
             }
+
+            setupFilterListeners();
 
             document.getElementById('autoRefreshSwitch').addEventListener('change', toggleAutoRefresh);
             document.getElementById('refreshInterval').addEventListener('change', onRefreshIntervalChange);

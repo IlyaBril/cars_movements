@@ -192,36 +192,49 @@ class MovementRepository:
             return False
 
     #Common
-    def get_data_from_db (self, date=None):
-        """Получение всей таблицы из движений"""
-        try:
-            
-            if date:
-                orders_query = self.session.query(Movement.Заказ).filter(
-                    func.date(Movement.Дата) == date,
-                    #Movement.VehicleModel == "M3"
-                    ).distinct()
+    def get_data_from_db (self, date=None, filters: dict | None = None):
+        """
+        Получение данных движений.
 
-                orders = orders_query.all()
-                 
-                # Извлекаем номера заказов
-                order_numbers = [order[0] for order in orders]
-                
-                if not order_numbers:
-                    return []  # Если заказов нет, возвращаем пустой список
-        
-                # Шаг 2: Получаем все движения, где номера заказов есть в списке
-                movements = self.session.query(Movement).filter(
-                    Movement.Заказ.in_(order_numbers)
-                    ).all()
-                
-                return movements
-            else:
-                return self.session.query(Movement).all()
+        :param date:    дата отчёта (YYYY-MM-DD) или None.
+        :param filters: dict {column_name: [values]} — уже провалидированный
+                    парсером. Репозиторий просто применяет IN(...).
+        """
+        filters = filters or {}
+        try:
+            orders_query = self.session.query(Movement.Заказ)
+            if date:
+                orders_query = orders_query.filter(
+                    func.date(Movement.Дата) == date,
+                )
+            for column, values in filters.items():
+                if not values:
+                    continue
+                field = getattr(Movement, column, None)
+                if field is None:
+                    logger.warning("Неизвестная колонка фильтра: %s", column)
+                    continue
+                orders_query = orders_query.filter(field.in_(values))
+
+            orders_query = orders_query.distinct()
+            orders = orders_query.all()
+             
+            # Извлекаем номера заказов
+            order_numbers = [order[0] for order in orders]
             
+            if not order_numbers:
+                return []  # Если заказов нет, возвращаем пустой список
+    
+            # Шаг 2: Получаем все движения, где номера заказов есть в списке
+            movements = self.session.query(Movement).filter(
+                Movement.Заказ.in_(order_numbers)
+                ).all()
+            
+            return movements
+        
         except SQLAlchemyError as e:
             raise SQLAlchemyError(f"Ошибка при получении данных из таблицы Movement: {e}")
-		
+                
     #move to data-service
     def load_from_excel_to_db(self, validated_data: list) -> Tuple[bool, str, int]:
         """Быстрая загрузка больших объемов данных"""

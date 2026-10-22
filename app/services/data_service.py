@@ -5,13 +5,15 @@ from datetime import datetime, date
 from fastapi import Depends
 from io import BytesIO
 from typing import List, Tuple, Dict, Annotated, Optional
-from app.db.models import ZoneStats
+from sqlalchemy.orm import Session
+from marshmallow import ValidationError
+
+from app.db.models import ZoneStats, Movement
 from app.db.repository import MovementRepository
 from app.db.database import SQLiteSession
 from app.db.schemas import MovementSchema
 from app.services.zone_service import ZoneService
-from sqlalchemy.orm import Session
-from marshmallow import ValidationError 
+from app.services.filter_parser import _resolve_column
 
 
 logging.basicConfig(level=logging.INFO)
@@ -36,7 +38,7 @@ class DataService:
         zones_types = self._movement_repo.get_reports_names()    
         return zones_types
     
-    def get_data(self, date_filter=None) -> pd.DataFrame:
+    def get_data(self, date_filter: str | None = None, filters: dict | None = None) -> pd.DataFrame:
         """
            Загрузка данных из SQLite
            Возвращает таблицу со всеми движениями VIN в таблице
@@ -44,9 +46,10 @@ class DataService:
            Преобразует формат столбца Дата в %Y-%m-%d %H:%M:%S
 
         """
+        logger.info(f'get data attrs filters {filters}')
         try:
             target_date = pd.Timestamp(date_filter).date()
-            movements = self._movement_repo.get_data_from_db(target_date)
+            movements = self._movement_repo.get_data_from_db(target_date, filters)
             schema = MovementSchema(many=True)
             df = pd.DataFrame(schema.dump(movements, many=True))
             if df.empty:
@@ -282,3 +285,16 @@ class DataService:
         except Exception as e:
             self.session.rollback()
             return False, f"Ошибка очистки: {str(e)}"
+
+    def get_filter_values(self, column: str) -> list[str]:
+        """Уникальные значения колонки — для наполнения мультиселектов на фронте."""
+        field = _resolve_column(column)
+        if field is None:
+            return []
+        rows = (
+            self._movement_repo.session.query(field)
+            .distinct()
+            .order_by(field)
+            .all()
+        )
+        return [r[0] for r in rows if r[0] is not None]
