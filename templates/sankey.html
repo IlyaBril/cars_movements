@@ -262,6 +262,16 @@
             margin-left: 4px;
         }
 
+        /* Подсветка «неприменённых» фильтров */
+        .filter-pending {
+            border-color: #ffc107 !important;
+            box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+        }
+        .filter-pending-badge {
+            background: #fff3cd;
+            color: #856404;
+        }
+
         @media (max-width: 768px) {
             #coordinatesDisplay {
                 bottom: 70px;
@@ -397,12 +407,16 @@
                         {% endfor %}
                     </select>
 
+                    <button id="applyFiltersBtn" class="btn btn-primary btn-sm" onclick="applyFiltersNow()" title="Применить выбранные фильтры">
+                        ✓ Применить
+                    </button>
+
                     <button class="btn btn-outline-secondary btn-sm" onclick="resetFilters()" title="Сбросить фильтры">
-                        ✕ Сбросить фильтры
+                        ✕ Сбросить
                     </button>
 
                     <small class="text-muted" id="filterHint">
-                        Ctrl/Cmd + клик — множественный выбор. Меню раскрывается кликом.
+                        Ctrl/Cmd + клик — множественный выбор. Запрос — после клика вне фильтра или «Применить».
                     </small>
                 </div>
             </div>
@@ -462,13 +476,12 @@
         let colorPickerOpenFor = null; // label узла, для которого открыта панель
         let graphDivInstance = null;
 
+        // Состояние фильтров: какие значения уже применены к запросу
+        let appliedFilterSignature = '';
+
         // ============================================================
         //  УТИЛИТЫ ЦВЕТА
         // ============================================================
-        /**
-         * HEX → RGBA.
-         * Поддерживает #rgb, #rrggbb. Если на входе уже rgba(...) — вернёт как есть.
-         */
         function hexToRgba(hex, opacity) {
             if (!hex) return `rgba(136,136,136,${opacity})`;
             if (typeof hex === 'string' && hex.startsWith('rgba')) return hex;
@@ -487,7 +500,6 @@
             return `rgba(${r},${g},${b},${a})`;
         }
 
-        /** Нормализовать запись стиля узла к виду {color, opacity} */
         function normalizeStyle(entry, fallbackColor) {
             if (!entry) {
                 return { color: fallbackColor || '#888888', opacity: 1 };
@@ -502,13 +514,9 @@
         }
 
         // ============================================================
-        //  ФИЛЬТРЫ
+        //  ФИЛЬТРЫ (новая логика: изменения копятся, запрос — по «Применить»
+        //  или клику вне зоны фильтра)
         // ============================================================
-        /**
-         * Собирает фильтр из мультиселектов в объект {column: [values]}.
-         * Пустые списки не включаются — бэкенд воспринимает отсутствие ключа
-         * как «фильтр не применять».
-         */
         function collectFilter() {
             const filters = {};
 
@@ -525,47 +533,130 @@
             return filters;
         }
 
-        /** Обновляет бейджи-счётчики у селектов. */
+        /** Подпись текущего выбора фильтров — для сравнения «применено/не применено». */
+        function filterSignature() {
+            return JSON.stringify(collectFilter());
+        }
+
         function updateFilterBadges() {
             const modelsCount = document.getElementById('vehicleModelFilter').selectedOptions.length;
             const zonesCount = document.getElementById('zoneFilter').selectedOptions.length;
             document.getElementById('vehicleModelCount').textContent = modelsCount;
             document.getElementById('zoneCount').textContent = zonesCount;
+
+            // Подсветка «есть неприменённые изменения»
+            const pending = filterSignature() !== appliedFilterSignature;
+            const modelSel = document.getElementById('vehicleModelFilter');
+            const zoneSel = document.getElementById('zoneFilter');
+            const applyBtn = document.getElementById('applyFiltersBtn');
+
+            [modelSel, zoneSel].forEach(sel => {
+                sel.classList.toggle('filter-pending', pending);
+            });
+            [document.getElementById('vehicleModelCount'),
+             document.getElementById('zoneCount')].forEach(el => {
+                el.classList.toggle('filter-pending-badge', pending);
+            });
+            applyBtn.classList.toggle('btn-warning', pending);
+            applyBtn.classList.toggle('btn-primary', !pending);
         }
 
-        /** Сбрасывает все фильтры и перезагружает диаграмму. */
-        function resetFilters() {
-            document.getElementById('vehicleModelFilter').selectedIndex = -1;
-            document.getElementById('zoneFilter').selectedIndex = -1;
+        /** Применяет фильтры: запрашивает данные, запоминает подпись. */
+        function applyFiltersNow() {
+            appliedFilterSignature = filterSignature();
             updateFilterBadges();
             loadSankeyData(true);
         }
 
-        /** Подписывает мультиселекты на изменение и обновляет бейджи. */
+        function resetFilters() {
+            document.getElementById('vehicleModelFilter').selectedIndex = -1;
+            document.getElementById('zoneFilter').selectedIndex = -1;
+            appliedFilterSignature = filterSignature();
+            updateFilterBadges();
+            loadSankeyData(true);
+        }
+
+        /**
+         * Настраивает мультиселекты:
+         *  - клик по option без модификатора — toggle (удобно для тачпадов),
+         *  - НЕ вызывает запрос при изменении,
+         *  - запрос — по клику вне зоны фильтра или Enter,
+         *  - меню остаётся раскрытым при выборе нескольких пунктов.
+         */
         function setupFilterListeners() {
             const modelSel = document.getElementById('vehicleModelFilter');
             const zoneSel = document.getElementById('zoneFilter');
+            const applyBtn = document.getElementById('applyFiltersBtn');
+
+            const filterZoneEls = [
+                modelSel, zoneSel,
+                document.querySelector('label[for="vehicleModelFilter"]'),
+                document.querySelector('label[for="zoneFilter"]'),
+                applyBtn
+            ];
+
+            // Сохраняем исходный размер (обычно 1) и раскрываем при работе
+            function openSelect(sel) {
+                if (sel._closedSize === undefined) sel._closedSize = sel.size;
+                sel.size = Math.min(Math.max(sel.options.length, 2), 10);
+            }
+            function closeSelect(sel) {
+                sel.size = (sel._closedSize !== undefined) ? sel._closedSize : 1;
+            }
 
             [modelSel, zoneSel].forEach(sel => {
-                sel.addEventListener('change', function() {
-                    updateFilterBadges();
-                    loadSankeyData(true);
-                });
-                // Клик по option с Ctrl/Cmd работает «из коробки».
-                // Дополнительно: клик по option без модификатора — toggle,
-                // чтобы не нужно было зажимать Ctrl на тачпадах/мобильных.
+                // Клик по option: без модификатора — toggle, с модификатором — нативно
                 sel.addEventListener('mousedown', function(e) {
-                    if (e.target.tagName === 'OPTION' && !e.ctrlKey && !e.metaKey) {
+                    if (e.target.tagName === 'OPTION' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
                         e.preventDefault();
                         e.target.selected = !e.target.selected;
-                        sel.dispatchEvent(new Event('change'));
-                        // держим селект раскрытым
-                        sel.size = Math.min(Math.max(sel.options.length, 2), 8);
-                        setTimeout(() => { sel.size = 1; }, 1500);
+                        updateFilterBadges();
                     }
+                    openSelect(sel);
+                });
+
+                // Изменение выбора — только обновляем бейджи/подсветку, БЕЗ запроса
+                sel.addEventListener('change', function() {
+                    updateFilterBadges();
+                });
+
+                // Enter — применить
+                sel.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        closeSelect(sel);
+                        applyFiltersNow();
+                    }
+                });
+
+                // Потеря фокуса (Tab) — закрыть и применить, если были изменения
+                sel.addEventListener('blur', function() {
+                    // Небольшая задержка, чтобы клик по option/apply успел обработаться
+                    setTimeout(() => {
+                        closeSelect(sel);
+                    }, 150);
                 });
             });
 
+            // Глобальный обработчик клика: если клик вне зоны фильтра
+            // и есть неприменённые изменения — применяем.
+            document.addEventListener('mousedown', function(e) {
+                // Клик внутри зоны фильтра — игнорируем
+                const inside = filterZoneEls.some(el => el && (el === e.target || el.contains(e.target)));
+                if (inside) return;
+
+                // Клик вне — закрываем раскрытые селекты
+                [modelSel, zoneSel].forEach(sel => {
+                    if (sel.size > 1) closeSelect(sel);
+                });
+
+                // Если есть неприменённые изменения — применяем
+                if (filterSignature() !== appliedFilterSignature) {
+                    applyFiltersNow();
+                }
+            });
+
+            // Enter на кнопке «Применить» тоже работает (это button)
             updateFilterBadges();
         }
 
@@ -577,6 +668,7 @@
             pendingColors = {};
             serverColors = {};
             colorPickerOpenFor = null;
+            appliedFilterSignature = filterSignature();
             loadSankeyData(true);
         }
 
@@ -755,11 +847,6 @@
             } catch (e) { return []; }
         }
 
-        /**
-         * Читает цвета узлов из графа и сохраняет их как {label: {color, opacity:1}}.
-         * Прозрачность сервер в готовом графе не отдаёт отдельно, поэтому
-         * восстанавливаем её из rgba(...) если цвет задан в этом формате.
-         */
         function readServerColorsFromGraph() {
             const graphDiv = document.querySelector('.plotly-graph-div');
             const result = {};
@@ -1141,10 +1228,6 @@
         // ============================================================
         //  СБОРКА URL С ФИЛЬТРОМ
         // ============================================================
-        /**
-         * Формирует query-строку для запросов к /sankey-chart и /sankey-gif.
-         * Единственное место на фронте, где «живут» конкретные фильтры.
-         */
         function buildQueryParams(extra = {}) {
             const params = new URLSearchParams();
 
@@ -1337,6 +1420,7 @@
             }
 
             setupFilterListeners();
+            appliedFilterSignature = filterSignature();
 
             document.getElementById('autoRefreshSwitch').addEventListener('change', toggleAutoRefresh);
             document.getElementById('refreshInterval').addEventListener('change', onRefreshIntervalChange);
