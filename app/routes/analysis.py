@@ -25,7 +25,7 @@ def root(request: Request):
         zone_types = data_service.get_zones_types()
         logger.info(f'zone_types {zone_types}')
     return templates.TemplateResponse(  
-        request=request, name="index(bootstrap).html",
+        request=request, name="hourly_table.html",
         context={"default_date": date, "zone_types": zone_types},
         )
 
