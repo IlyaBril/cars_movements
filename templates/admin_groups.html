@@ -1,8 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Админ‑панель — Управление группами</title>
-    <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
+{% extends "base.html" %}
+
+{% block title %}Админ-панель — Управление группами{% endblock %}
+{% block nav_groups %}active{% endblock %}
+
+{% block styles %}
     <style>
         .zone-checkbox {
             margin-right: 10px;
@@ -46,8 +47,9 @@
             border-radius: 4px;
         }
     </style>
-</head>
-<body class="bg-light">
+{% endblock %}
+
+{% block content %}
     <div class="container py-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="h4">Управление группами зон</h1>
@@ -153,7 +155,9 @@
         <!-- Сообщения -->
         <div id="message" class="mt-3"></div>
     </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
     // Данные групп из Python
     const groupsData = {{ groups_json|safe }};
@@ -312,5 +316,4 @@ async function editGroup(groupName) {
         }
     }
 </script>
-</body>
-</html>
+{% endblock %}
