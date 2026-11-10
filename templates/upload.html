@@ -1,12 +1,11 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Загрузка данных в базу</title>
-    <!-- Подключение Bootstrap (как в первом фронте) -->
-    <link href="{{ url_for('static', path='/css/bootstrap.min.css') }}" rel="stylesheet">
-    <style>
+{% extends "base.html" %}
+
+{% block title %}Загрузка данных в базу{% endblock %}
+{% block nav_data %}active{% endblock %}
+
+
+   {% block styles %}
+   <style>
         body {
             background-color: #f8f9fa;
         }
@@ -101,8 +100,9 @@
             border: 1px solid #9eeaf9;
         }
     </style>
-</head>
-<body class="bg-light">
+    {% endblock %}
+
+    {% block content %}
     <div class="container-fluid py-3">
         <!-- Верхняя панель с заголовком -->
         <div class="row mb-3">
@@ -172,7 +172,9 @@
             </div>
         </div>
     </div>
-
+    {% endblock %}
+    
+    {% block scripts %}
     <script>
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
@@ -393,5 +395,4 @@
             });
         }, 1000);
     </script>
-</body>
-</html>
+{% endblock %}
