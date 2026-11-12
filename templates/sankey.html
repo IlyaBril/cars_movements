@@ -238,14 +238,39 @@
         #coordinatesDisplay.show { display: block !important; }
 
         /* ── Мультиселекты фильтров ──────────────────────────── */
-        .filter-multiselect {
+        .filter-select-wrap {
+            position: relative;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        .filter-select-wrap .filter-multiselect {
             min-width: 170px;
             max-width: 260px;
-            height: auto;
             min-height: 31px;
+            height: auto;
             font-size: 0.85rem;
+            cursor: pointer;
+            position: relative;
+            z-index: 1;
+            background: #fff;
         }
         .filter-multiselect option { padding: 2px 4px; }
+
+        /* Раскрытое состояние — вырываем из потока, кладём поверх графика */
+        .filter-select-wrap.is-open .filter-multiselect {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1050;
+            min-width: 240px;
+            max-width: 320px;
+            max-height: 340px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+            border-color: #86b7fe;
+            outline: 0;
+        }
+
         .filter-badge {
             display: inline-block;
             background: #e7f1ff;
@@ -283,7 +308,8 @@
                 font-size: 16px;
             }
             .coord-label { max-width: 110px; }
-            .filter-multiselect { min-width: 130px; max-width: 170px; }
+            .filter-select-wrap .filter-multiselect { min-width: 130px; max-width: 170px; }
+            .filter-select-wrap.is-open .filter-multiselect { min-width: 200px; max-width: 260px; }
         }
     </style>
     {% endblock %}
@@ -387,21 +413,25 @@
                         Модель:
                         <span class="filter-badge" id="vehicleModelCount">0</span>
                     </label>
-                    <select id="vehicleModelFilter" class="form-select form-select-sm filter-multiselect" multiple size="1">
-                        {% for m in vehicle_models %}
-                        <option value="{{ m }}">{{ m }}</option>
-                        {% endfor %}
-                    </select>
+                    <div class="filter-select-wrap">
+                        <select id="vehicleModelFilter" class="form-select form-select-sm filter-multiselect" multiple size="1">
+                            {% for m in vehicle_models %}
+                            <option value="{{ m }}">{{ m }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
 
                     <label for="zoneFilter" class="form-label mb-0 small fw-bold">
                         Точка регистрации:
                         <span class="filter-badge" id="zoneCount">0</span>
                     </label>
-                    <select id="zoneFilter" class="form-select form-select-sm filter-multiselect" multiple size="1">
-                        {% for z in all_zones %}
-                        <option value="{{ z }}">{{ z }}</option>
-                        {% endfor %}
-                    </select>
+                    <div class="filter-select-wrap">
+                        <select id="zoneFilter" class="form-select form-select-sm filter-multiselect" multiple size="1">
+                            {% for z in all_zones %}
+                            <option value="{{ z }}">{{ z }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
 
                     <button id="applyFiltersBtn" class="btn btn-primary btn-sm" onclick="applyFiltersNow()" title="Применить выбранные фильтры">
                         ✓ Применить
@@ -510,8 +540,7 @@
         }
 
         // ============================================================
-        //  ФИЛЬТРЫ (новая логика: изменения копятся, запрос — по «Применить»
-        //  или клику вне зоны фильтра)
+        //  ФИЛЬТРЫ
         // ============================================================
         function collectFilter() {
             const filters = {};
@@ -574,10 +603,11 @@
 
         /**
          * Настраивает мультиселекты:
-         *  - клик по option без модификатора — toggle (удобно для тачпадов),
+         *  - клик по option без модификатора — toggle,
          *  - НЕ вызывает запрос при изменении,
          *  - запрос — по клику вне зоны фильтра или Enter,
-         *  - меню остаётся раскрытым при выборе нескольких пунктов.
+         *  - меню остаётся раскрытым при выборе нескольких пунктов,
+         *  - раскрытый список позиционируется абсолютно (поверх графика).
          */
         function setupFilterListeners() {
             const modelSel = document.getElementById('vehicleModelFilter');
@@ -586,6 +616,8 @@
 
             const filterZoneEls = [
                 modelSel, zoneSel,
+                modelSel.closest('.filter-select-wrap'),
+                zoneSel.closest('.filter-select-wrap'),
                 document.querySelector('label[for="vehicleModelFilter"]'),
                 document.querySelector('label[for="zoneFilter"]'),
                 applyBtn
@@ -595,9 +627,13 @@
             function openSelect(sel) {
                 if (sel._closedSize === undefined) sel._closedSize = sel.size;
                 sel.size = Math.min(Math.max(sel.options.length, 2), 10);
+                const wrap = sel.closest('.filter-select-wrap');
+                if (wrap) wrap.classList.add('is-open');
             }
             function closeSelect(sel) {
                 sel.size = (sel._closedSize !== undefined) ? sel._closedSize : 1;
+                const wrap = sel.closest('.filter-select-wrap');
+                if (wrap) wrap.classList.remove('is-open');
             }
 
             [modelSel, zoneSel].forEach(sel => {
@@ -608,6 +644,11 @@
                         e.target.selected = !e.target.selected;
                         updateFilterBadges();
                     }
+                    openSelect(sel);
+                });
+
+                // Фокус на селекте — раскрываем список поверх графика
+                sel.addEventListener('focus', function() {
                     openSelect(sel);
                 });
 
