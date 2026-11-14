@@ -3,9 +3,10 @@ import os
 import random
 import plotly.graph_objects as go
 import pandas as pd
+import json
 
 from datetime import datetime
-from fastapi import APIRouter, Request, Query, Body, Cookie
+from fastapi import APIRouter, Request, Query, Body, Cookie, Response, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import FileResponse
@@ -69,9 +70,9 @@ async def save_sankey_filters(
     }
     response.set_cookie(
         key=COOKIE_NAME,
-        value=json.dumps(merged, ensure_ascii=False),
+        value=json.dumps(merged, ensure_ascii=True),
         max_age=COOKIE_MAX_AGE,
-        httponly=False,  # фронту не обязательно читать, но не мешает
+        httponly=False,
         samesite="lax",
         path="/",
     )
