@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import pandas as pd
 
 from datetime import datetime
-from fastapi import APIRouter, Request, Query, Body
+from fastapi import APIRouter, Request, Query, Body, Cookie
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import FileResponse
@@ -22,28 +22,98 @@ templates = Jinja2Templates(directory="templates")
 
 ENABLE_CALIBRATION = True  # Глобальная переменная в начале файла
 
+COOKIE_NAME = "sankey_filters"
+COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 дней
+
 
 def default_date():
     return datetime.today().strftime("%Y-%m-%d")
 
 
+def _read_filters_cookie(raw: str | None) -> dict:
+    """Читает JSON из cookie и валидирует структуру."""
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            return {}
+    except (ValueError, TypeError):
+        return {}
+    result = {}
+    if isinstance(data.get("filters"), dict):
+        result["filters"] = data["filters"]
+    if isinstance(data.get("date"), str):
+        result["date"] = data["date"]
+    if isinstance(data.get("zone_type"), str):
+        result["zone_type"] = data["zone_type"]
+    return result
+
+
+@router.post("/sankey-filters")
+async def save_sankey_filters(
+    response: Response,
+    payload: dict = Body(...),
+    sankey_filters: str | None = Cookie(default=None, alias=COOKIE_NAME),
+):
+    """
+    Сохраняет настройки фильтров в cookie.
+    Тело: { "filters": {...}, "date": "YYYY-MM-DD", "zone_type": "main" }
+    Мержит с уже сохранённым значением, чтобы не потерять поля.
+    """
+    existing = _read_filters_cookie(sankey_filters)
+    merged = {
+        "filters": payload.get("filters", existing.get("filters", {})),
+        "date": payload.get("date", existing.get("date", default_date())),
+        "zone_type": payload.get("zone_type", existing.get("zone_type", "main")),
+    }
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=json.dumps(merged, ensure_ascii=False),
+        max_age=COOKIE_MAX_AGE,
+        httponly=False,  # фронту не обязательно читать, но не мешает
+        samesite="lax",
+        path="/",
+    )
+    return {"success": True}
+
+
 @router.get("/sankey")
-async def sankey_page(request: Request):
+async def sankey_page(
+    request: Request,
+    sankey_filters: str | None = Cookie(default=None, alias=COOKIE_NAME),
+):
     data_service = DataService()
     with data_service:
         reports = data_service.get_zones_types()
         vehicle_models = data_service.get_filter_values("VehicleModel")
         all_zones = data_service.get_filter_values("Точка_регистрации")
+        # для новых фильтров добавите здесь свои get_filter_values(...)
+
+    saved = _read_filters_cookie(sankey_filters)
+
+    # filters — произвольный dict: {"VehicleModel": [...], "Точка_регистрации": [...], ...}
+    saved_filters = saved.get("filters", {}) or {}
+
+    default_zone = saved.get("zone_type")
+    if not default_zone or default_zone not in reports:
+        default_zone = reports[0] if reports else "main"
+
+    default_date_value = saved.get("date") or default_date()
 
     return templates.TemplateResponse(
         request=request,
         name="sankey.html",
         context={
-            "default_date": default_date(),
+            "default_date": default_date_value,
             "zone_types": reports,
             "vehicle_models": vehicle_models,
             "all_zones": all_zones,
-        })
+            "initial_zone_type": default_zone,
+            "initial_filters": saved_filters,
+        },
+    )
+
 
 @router.get("/sankey-chart")
 async def get_sankey_chart(

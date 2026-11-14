@@ -326,15 +326,14 @@
                         <button class="btn btn-outline-primary btn-sm dropdown-toggle"
                                 type="button"
                                 data-bs-toggle="dropdown">
-                            <span id="selectedZone">{{ zone_types[0] if zone_types else 'Выберите зону' }}</span>
+                            <span id="selectedZone">{{ initial_zone_type if initial_zone_type else (zone_types[0] if zone_types else 'Выберите зону') }}</span>
                         </button>
                         <ul class="dropdown-menu">
                             {% for zone_type in zone_types %}
                             <li>
                                 <button class="dropdown-item"
                                         type="button"
-                                        onclick="switchZoneType('{{ zone_type }}');
-                                                 document.getElementById('selectedZone').textContent = '{{ zone_type }}'">
+                                        onclick="switchZoneType('{{ zone_type }}')">
                                     {{ zone_type }}
                                 </button>
                             </li>
@@ -411,10 +410,10 @@
                 <div class="d-flex align-items-center gap-2 flex-wrap">
                     <label for="vehicleModelFilter" class="form-label mb-0 small fw-bold">
                         Модель:
-                        <span class="filter-badge" id="vehicleModelCount">0</span>
+                        <span class="filter-badge" id="vehicleModelCount" data-count-for="vehicleModelFilter">0</span>
                     </label>
                     <div class="filter-select-wrap">
-                        <select id="vehicleModelFilter" class="form-select form-select-sm filter-multiselect" multiple size="1">
+                        <select id="vehicleModelFilter" data-filter-key="VehicleModel" class="form-select form-select-sm filter-multiselect" multiple size="1">
                             {% for m in vehicle_models %}
                             <option value="{{ m }}">{{ m }}</option>
                             {% endfor %}
@@ -423,10 +422,10 @@
 
                     <label for="zoneFilter" class="form-label mb-0 small fw-bold">
                         Точка регистрации:
-                        <span class="filter-badge" id="zoneCount">0</span>
+                        <span class="filter-badge" id="zoneCount" data-count-for="zoneFilter">0</span>
                     </label>
                     <div class="filter-select-wrap">
-                        <select id="zoneFilter" class="form-select form-select-sm filter-multiselect" multiple size="1">
+                        <select id="zoneFilter" data-filter-key="Точка_регистрации" class="form-select form-select-sm filter-multiselect" multiple size="1">
                             {% for z in all_zones %}
                             <option value="{{ z }}">{{ z }}</option>
                             {% endfor %}
@@ -485,10 +484,16 @@
     {% block scripts %}
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
+        const INITIAL_STATE = {
+            zoneType: {{ initial_zone_type|tojson }},
+            filters: {{ initial_filters|tojson }},
+        };
+
         // ============================================================
         //  ГЛОБАЛЬНОЕ СОСТОЯНИЕ
         // ============================================================
-        let currentZoneType = '{{ zone_types[0] if zone_types else "main" }}';
+        let currentZoneType = INITIAL_STATE.zoneType
+            || '{{ zone_types[0] if zone_types else "main" }}';
         let refreshTimer = null;
         let isAutoRefreshEnabled = true;
         let showCoords = false;
@@ -544,18 +549,26 @@
         // ============================================================
         function collectFilter() {
             const filters = {};
-
-            const models = Array.from(
-                document.getElementById('vehicleModelFilter').selectedOptions
-            ).map(o => o.value).filter(Boolean);
-            if (models.length) filters['VehicleModel'] = models;
-
-            const zones = Array.from(
-                document.getElementById('zoneFilter').selectedOptions
-            ).map(o => o.value).filter(Boolean);
-            if (zones.length) filters['Точка_регистрации'] = zones;
-
+            document.querySelectorAll('select[data-filter-key]').forEach(sel => {
+                const key = sel.dataset.filterKey;
+                if (!key) return;
+                const values = Array.from(sel.selectedOptions)
+                    .map(o => o.value)
+                    .filter(Boolean);
+                if (values.length) filters[key] = values;
+            });
             return filters;
+        }
+
+        function restoreFiltersFromInitial() {
+            const initial = INITIAL_STATE.filters || {};
+            document.querySelectorAll('select[data-filter-key]').forEach(sel => {
+                const key = sel.dataset.filterKey;
+                const wanted = new Set(initial[key] || []);
+                Array.from(sel.options).forEach(o => {
+                    o.selected = wanted.has(o.value);
+                });
+            });
         }
 
         /** Подпись текущего выбора фильтров — для сравнения «применено/не применено». */
@@ -563,41 +576,56 @@
             return JSON.stringify(collectFilter());
         }
 
+        /** Обновление бейджей */
         function updateFilterBadges() {
-            const modelsCount = document.getElementById('vehicleModelFilter').selectedOptions.length;
-            const zonesCount = document.getElementById('zoneFilter').selectedOptions.length;
-            document.getElementById('vehicleModelCount').textContent = modelsCount;
-            document.getElementById('zoneCount').textContent = zonesCount;
+            document.querySelectorAll('select[data-filter-key]').forEach(sel => {
+                const badge = document.querySelector(`[data-count-for="${sel.id}"]`);
+                if (badge) badge.textContent = sel.selectedOptions.length;
+            });
 
-            // Подсветка «есть неприменённые изменения»
             const pending = filterSignature() !== appliedFilterSignature;
-            const modelSel = document.getElementById('vehicleModelFilter');
-            const zoneSel = document.getElementById('zoneFilter');
-            const applyBtn = document.getElementById('applyFiltersBtn');
-
-            [modelSel, zoneSel].forEach(sel => {
+            document.querySelectorAll('select[data-filter-key]').forEach(sel => {
                 sel.classList.toggle('filter-pending', pending);
             });
-            [document.getElementById('vehicleModelCount'),
-             document.getElementById('zoneCount')].forEach(el => {
+            document.querySelectorAll('[data-count-for]').forEach(el => {
                 el.classList.toggle('filter-pending-badge', pending);
             });
-            applyBtn.classList.toggle('btn-warning', pending);
-            applyBtn.classList.toggle('btn-primary', !pending);
+            const applyBtn = document.getElementById('applyFiltersBtn');
+            if (applyBtn) {
+                applyBtn.classList.toggle('btn-warning', pending);
+                applyBtn.classList.toggle('btn-primary', !pending);
+            }
         }
 
-        /** Применяет фильтры: запрашивает данные, запоминает подпись. */
+        /** Сохраняет текущие фильтры/дату/зону в cookie через бэкенд. */
+        function persistFiltersToCookie() {
+            fetch('/sankey-filters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    filters: collectFilter(),
+                    date: document.getElementById('analysisDate').value,
+                    zone_type: currentZoneType,
+                }),
+                keepalive: true,
+            }).catch(err => console.warn('Не удалось сохранить фильтры:', err));
+        }
+
+        /** Применяет фильтры: запрашивает данные, запоминает подпись, сохраняет в cookie. */
         function applyFiltersNow() {
             appliedFilterSignature = filterSignature();
             updateFilterBadges();
+            persistFiltersToCookie();
             loadSankeyData(true);
         }
 
         function resetFilters() {
-            document.getElementById('vehicleModelFilter').selectedIndex = -1;
-            document.getElementById('zoneFilter').selectedIndex = -1;
+            document.querySelectorAll('select[data-filter-key]').forEach(sel => {
+                sel.selectedIndex = -1;
+            });
             appliedFilterSignature = filterSignature();
             updateFilterBadges();
+            persistFiltersToCookie();
             loadSankeyData(true);
         }
 
@@ -609,21 +637,20 @@
          *  - меню остаётся раскрытым при выборе нескольких пунктов,
          *  - раскрытый список позиционируется абсолютно (поверх графика).
          */
+        let _filterListenersInstalled = false;
+
         function setupFilterListeners() {
-            const modelSel = document.getElementById('vehicleModelFilter');
-            const zoneSel = document.getElementById('zoneFilter');
+            const selects = Array.from(document.querySelectorAll('select[data-filter-key]'));
             const applyBtn = document.getElementById('applyFiltersBtn');
 
-            const filterZoneEls = [
-                modelSel, zoneSel,
-                modelSel.closest('.filter-select-wrap'),
-                zoneSel.closest('.filter-select-wrap'),
-                document.querySelector('label[for="vehicleModelFilter"]'),
-                document.querySelector('label[for="zoneFilter"]'),
-                applyBtn
-            ];
+            const filterZoneEls = [];
+            selects.forEach(sel => {
+                const wrap = sel.closest('.filter-select-wrap');
+                const lbl = document.querySelector(`label[for="${sel.id}"]`);
+                filterZoneEls.push(sel, wrap, lbl);
+            });
+            filterZoneEls.push(applyBtn);
 
-            // Сохраняем исходный размер (обычно 1) и раскрываем при работе
             function openSelect(sel) {
                 if (sel._closedSize === undefined) sel._closedSize = sel.size;
                 sel.size = Math.min(Math.max(sel.options.length, 2), 10);
@@ -636,8 +663,7 @@
                 if (wrap) wrap.classList.remove('is-open');
             }
 
-            [modelSel, zoneSel].forEach(sel => {
-                // Клик по option: без модификатора — toggle, с модификатором — нативно
+            selects.forEach(sel => {
                 sel.addEventListener('mousedown', function(e) {
                     if (e.target.tagName === 'OPTION' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
                         e.preventDefault();
@@ -646,18 +672,8 @@
                     }
                     openSelect(sel);
                 });
-
-                // Фокус на селекте — раскрываем список поверх графика
-                sel.addEventListener('focus', function() {
-                    openSelect(sel);
-                });
-
-                // Изменение выбора — только обновляем бейджи/подсветку, БЕЗ запроса
-                sel.addEventListener('change', function() {
-                    updateFilterBadges();
-                });
-
-                // Enter — применить
+                sel.addEventListener('focus', () => openSelect(sel));
+                sel.addEventListener('change', () => updateFilterBadges());
                 sel.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter') {
                         e.preventDefault();
@@ -665,35 +681,29 @@
                         applyFiltersNow();
                     }
                 });
-
-                // Потеря фокуса (Tab) — закрыть и применить, если были изменения
                 sel.addEventListener('blur', function() {
-                    // Небольшая задержка, чтобы клик по option/apply успел обработаться
-                    setTimeout(() => {
-                        closeSelect(sel);
-                    }, 150);
+                    setTimeout(() => closeSelect(sel), 150);
                 });
             });
 
-            // Глобальный обработчик клика: если клик вне зоны фильтра
-            // и есть неприменённые изменения — применяем.
-            document.addEventListener('mousedown', function(e) {
-                // Клик внутри зоны фильтра — игнорируем
-                const inside = filterZoneEls.some(el => el && (el === e.target || el.contains(e.target)));
-                if (inside) return;
+            // Глобальный mousedown — навешиваем один раз
+            if (!_filterListenersInstalled) {
+                _filterListenersInstalled = true;
+                document.addEventListener('mousedown', function(e) {
+                    const inside = filterZoneEls.some(el => el && (el === e.target || el.contains(e.target)));
+                    if (inside) return;
 
-                // Клик вне — закрываем раскрытые селекты
-                [modelSel, zoneSel].forEach(sel => {
-                    if (sel.size > 1) closeSelect(sel);
+                    document.querySelectorAll('select[data-filter-key]').forEach(sel => {
+                        if (sel.size > 1) {
+                            sel.size = (sel._closedSize !== undefined) ? sel._closedSize : 1;
+                            const wrap = sel.closest('.filter-select-wrap');
+                            if (wrap) wrap.classList.remove('is-open');
+                        }
+                    });
+                    if (filterSignature() !== appliedFilterSignature) applyFiltersNow();
                 });
+            }
 
-                // Если есть неприменённые изменения — применяем
-                if (filterSignature() !== appliedFilterSignature) {
-                    applyFiltersNow();
-                }
-            });
-
-            // Enter на кнопке «Применить» тоже работает (это button)
             updateFilterBadges();
         }
 
@@ -702,10 +712,14 @@
         // ============================================================
         function switchZoneType(type) {
             currentZoneType = type;
+            const label = document.getElementById('selectedZone');
+            if (label) label.textContent = type;
+
             pendingColors = {};
             serverColors = {};
             colorPickerOpenFor = null;
             appliedFilterSignature = filterSignature();
+            persistFiltersToCookie();
             loadSankeyData(true);
         }
 
@@ -1450,21 +1464,24 @@
         //  ИНИЦИАЛИЗАЦИЯ
         // ============================================================
         $(document).ready(function() {
-            const zoneTypes = {{ zone_types|tojson }};
-            if (zoneTypes && zoneTypes.length > 0) {
-                currentZoneType = zoneTypes[0];
-                document.getElementById('selectedZone').textContent = zoneTypes[0];
-            }
+            // 1. Восстанавливаем выбранные значения в мультиселектах
+            restoreFiltersFromInitial();
 
-            setupFilterListeners();
+            // 2. Синхронизируем подпись для корректной работы кнопки «Применить»
             appliedFilterSignature = filterSignature();
 
+            // 3. Навешиваем обработчики
+            setupFilterListeners();
+
+            // 4. Обработчики остальных контролов
             document.getElementById('autoRefreshSwitch').addEventListener('change', toggleAutoRefresh);
             document.getElementById('refreshInterval').addEventListener('change', onRefreshIntervalChange);
             document.getElementById('analysisDate').addEventListener('change', function() {
+                persistFiltersToCookie();
                 loadSankeyData(true);
             });
 
+            // 5. Первая загрузка
             loadSankeyData(true);
 
             if (document.getElementById('autoRefreshSwitch').checked) {

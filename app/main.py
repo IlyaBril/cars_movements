@@ -24,7 +24,8 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(analysis.router)
 app.include_router(admin_groups.router)
 app.include_router(sankey.router)
-app.include_router(upload.router) 
+app.include_router(upload.router)
+
 
 @app.get("/health")
 async def health_check():
