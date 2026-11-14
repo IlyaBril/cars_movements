@@ -76,7 +76,8 @@ class DataService:
 
         for group in query:
             logger.info(f'for groups  {group.name}')
-            groups[group.name] = [children.name for children in group.children]
+            groups[group.name] = [children.name for children in sorted(group.children, key=lambda z: z.order)]
+            #[zone.name for zone in sorted(report.report_zones, key=lambda z: z.order)
             logger.info(f'for groups  {groups}')
 
         all_available_zones = df['Точка регистрации'].unique()
@@ -98,7 +99,7 @@ class DataService:
                     print(f"✅ Добавлена группа: {group_name}")
             else:
                 print(f"❌ Группа '{group_name}' пропущена. Нет доступных зон")
-                all_entities.remove(group_name)
+                #zones_list.remove(group_name)
     
         print(f"Группы для замены: {zone_to_group}")
         logger.info(f'{__name__} _prepare_zones_and_mapping return \n zone_to_group {zone_to_group} \n {zones_list}')

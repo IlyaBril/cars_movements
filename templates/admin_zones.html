@@ -414,4 +414,31 @@
             
             if (!response.ok) {
                 showMessage('Ошибка загрузки данных', 'error');
+                return;
+            }
+            
+            editingGroupName = groupName;
+            document.getElementById('formTitle').textContent = `Редактирование: ${groupName}`;
+            document.getElementById('groupName').value = groupName;
+            
+            // Используем все зоны из данных сервера
+            const currentZones = data.current_zones || [];
+            
+            // Устанавливаем доступные зоны (все зоны, кроме выбранных)
+            availableZones = allZonesFromServer.filter(z => !currentZones.includes(z));
+            selectedZones = [...currentZones]; // Сохраняем порядок
+            
+            renderLists();
+            updateCounts();
+            updateSelectedDisplay();
+            
+            showMessage(`Редактирование группы "${groupName}"`, 'success');
+            document.querySelector('.card:first-child').scrollIntoView({ behavior: 'smooth' });
+            
+        } catch (error) {
+            console.error('Error:', error);
+            showMessage('Ошибка при загрузке данных', 'error');
+        }
+    }
+    </script>
 {% endblock %}

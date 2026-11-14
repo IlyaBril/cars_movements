@@ -32,6 +32,7 @@ class MovementRepository:
         select(ZoneWithGroup.name)
         .join(ZoneReport)
         .where(ZoneReport.name == report_name)
+        .order_by(ZoneWithGroup.order)
         )
         response = self.session.execute(stmt).scalars().all()
         return response

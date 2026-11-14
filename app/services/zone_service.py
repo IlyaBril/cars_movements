@@ -32,9 +32,8 @@ class ZoneService(BaseZoneService):
         query = self._movement_repo.get_dash_zones_repo()
         reports = {}
         for report in query:
-            reports[report.name] = [
-                zone.name for zone in report.report_zones
-            ]
+            reports[report.name] = [zone.name for zone in sorted(report.report_zones, key=lambda z: z.order)
+        ]
         logger.info(f'{__name__} dash zones {reports}')
         return reports
 
