@@ -483,6 +483,7 @@
 
     {% block scripts %}
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="{{ url_for('static', path='js/filter_core.js') }}"></script>
     <script>
         const INITIAL_STATE = {
             zoneType: {{ initial_zone_type|tojson }},
@@ -506,9 +507,6 @@
 
         let colorPickerOpenFor = null; // label узла, для которого открыта панель
         let graphDivInstance = null;
-
-        // Состояние фильтров: какие значения уже применены к запросу
-        let appliedFilterSignature = '';
 
         // ============================================================
         //  УТИЛИТЫ ЦВЕТА
@@ -547,181 +545,41 @@
         // ============================================================
         //  ФИЛЬТРЫ
         // ============================================================
-        function collectFilter() {
-            const filters = {};
-            document.querySelectorAll('select[data-filter-key]').forEach(sel => {
-                const key = sel.dataset.filterKey;
-                if (!key) return;
-                const values = Array.from(sel.selectedOptions)
-                    .map(o => o.value)
-                    .filter(Boolean);
-                if (values.length) filters[key] = values;
-            });
-            return filters;
-        }
+        
+function applyFiltersNow() {
+    FilterCore.setAppliedSignature();
+    FilterCore.updateFilterBadges();
+    FilterCore.persistFiltersToCookie('/sankey-filters', { zone_type: currentZoneType });
+    loadSankeyData(true);
+}
 
-        function restoreFiltersFromInitial() {
-            const initial = INITIAL_STATE.filters || {};
-            document.querySelectorAll('select[data-filter-key]').forEach(sel => {
-                const key = sel.dataset.filterKey;
-                const wanted = new Set(initial[key] || []);
-                Array.from(sel.options).forEach(o => {
-                    o.selected = wanted.has(o.value);
-                });
-            });
-        }
+function resetFilters() {
+    document.querySelectorAll('select[data-filter-key]').forEach(sel => {
+        sel.selectedIndex = -1;
+    });
+    FilterCore.setAppliedSignature();
+    FilterCore.updateFilterBadges();
+    FilterCore.persistFiltersToCookie('/sankey-filters', { zone_type: currentZoneType });
+    loadSankeyData(true);
+}
 
-        /** Подпись текущего выбора фильтров — для сравнения «применено/не применено». */
-        function filterSignature() {
-            return JSON.stringify(collectFilter());
-        }
-
-        /** Обновление бейджей */
-        function updateFilterBadges() {
-            document.querySelectorAll('select[data-filter-key]').forEach(sel => {
-                const badge = document.querySelector(`[data-count-for="${sel.id}"]`);
-                if (badge) badge.textContent = sel.selectedOptions.length;
-            });
-
-            const pending = filterSignature() !== appliedFilterSignature;
-            document.querySelectorAll('select[data-filter-key]').forEach(sel => {
-                sel.classList.toggle('filter-pending', pending);
-            });
-            document.querySelectorAll('[data-count-for]').forEach(el => {
-                el.classList.toggle('filter-pending-badge', pending);
-            });
-            const applyBtn = document.getElementById('applyFiltersBtn');
-            if (applyBtn) {
-                applyBtn.classList.toggle('btn-warning', pending);
-                applyBtn.classList.toggle('btn-primary', !pending);
-            }
-        }
-
-        /** Сохраняет текущие фильтры/дату/зону в cookie через бэкенд. */
-        function persistFiltersToCookie() {
-            fetch('/sankey-filters', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    filters: collectFilter(),
-                    date: document.getElementById('analysisDate').value,
-                    zone_type: currentZoneType,
-                }),
-                keepalive: true,
-            }).catch(err => console.warn('Не удалось сохранить фильтры:', err));
-        }
-
-        /** Применяет фильтры: запрашивает данные, запоминает подпись, сохраняет в cookie. */
-        function applyFiltersNow() {
-            appliedFilterSignature = filterSignature();
-            updateFilterBadges();
-            persistFiltersToCookie();
-            loadSankeyData(true);
-        }
-
-        function resetFilters() {
-            document.querySelectorAll('select[data-filter-key]').forEach(sel => {
-                sel.selectedIndex = -1;
-            });
-            appliedFilterSignature = filterSignature();
-            updateFilterBadges();
-            persistFiltersToCookie();
-            loadSankeyData(true);
-        }
-
-        /**
-         * Настраивает мультиселекты:
-         *  - клик по option без модификатора — toggle,
-         *  - НЕ вызывает запрос при изменении,
-         *  - запрос — по клику вне зоны фильтра или Enter,
-         *  - меню остаётся раскрытым при выборе нескольких пунктов,
-         *  - раскрытый список позиционируется абсолютно (поверх графика).
-         */
-        let _filterListenersInstalled = false;
-
-        function setupFilterListeners() {
-            const selects = Array.from(document.querySelectorAll('select[data-filter-key]'));
-            const applyBtn = document.getElementById('applyFiltersBtn');
-
-            const filterZoneEls = [];
-            selects.forEach(sel => {
-                const wrap = sel.closest('.filter-select-wrap');
-                const lbl = document.querySelector(`label[for="${sel.id}"]`);
-                filterZoneEls.push(sel, wrap, lbl);
-            });
-            filterZoneEls.push(applyBtn);
-
-            function openSelect(sel) {
-                if (sel._closedSize === undefined) sel._closedSize = sel.size;
-                sel.size = Math.min(Math.max(sel.options.length, 2), 10);
-                const wrap = sel.closest('.filter-select-wrap');
-                if (wrap) wrap.classList.add('is-open');
-            }
-            function closeSelect(sel) {
-                sel.size = (sel._closedSize !== undefined) ? sel._closedSize : 1;
-                const wrap = sel.closest('.filter-select-wrap');
-                if (wrap) wrap.classList.remove('is-open');
-            }
-
-            selects.forEach(sel => {
-                sel.addEventListener('mousedown', function(e) {
-                    if (e.target.tagName === 'OPTION' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                        e.preventDefault();
-                        e.target.selected = !e.target.selected;
-                        updateFilterBadges();
-                    }
-                    openSelect(sel);
-                });
-                sel.addEventListener('focus', () => openSelect(sel));
-                sel.addEventListener('change', () => updateFilterBadges());
-                sel.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        closeSelect(sel);
-                        applyFiltersNow();
-                    }
-                });
-                sel.addEventListener('blur', function() {
-                    setTimeout(() => closeSelect(sel), 150);
-                });
-            });
-
-            // Глобальный mousedown — навешиваем один раз
-            if (!_filterListenersInstalled) {
-                _filterListenersInstalled = true;
-                document.addEventListener('mousedown', function(e) {
-                    const inside = filterZoneEls.some(el => el && (el === e.target || el.contains(e.target)));
-                    if (inside) return;
-
-                    document.querySelectorAll('select[data-filter-key]').forEach(sel => {
-                        if (sel.size > 1) {
-                            sel.size = (sel._closedSize !== undefined) ? sel._closedSize : 1;
-                            const wrap = sel.closest('.filter-select-wrap');
-                            if (wrap) wrap.classList.remove('is-open');
-                        }
-                    });
-                    if (filterSignature() !== appliedFilterSignature) applyFiltersNow();
-                });
-            }
-
-            updateFilterBadges();
-        }
-
+  
         // ============================================================
         //  ПЕРЕКЛЮЧЕНИЕ ЗОНЫ
         // ============================================================
-        function switchZoneType(type) {
-            currentZoneType = type;
-            const label = document.getElementById('selectedZone');
-            if (label) label.textContent = type;
+function switchZoneType(type) {
+    currentZoneType = type;
+    const label = document.getElementById('selectedZone');
+    if (label) label.textContent = type;
 
-            pendingColors = {};
-            serverColors = {};
-            colorPickerOpenFor = null;
-            appliedFilterSignature = filterSignature();
-            persistFiltersToCookie();
-            loadSankeyData(true);
-        }
+    pendingColors = {};
+    serverColors = {};
+    colorPickerOpenFor = null;
+
+    FilterCore.setAppliedSignature();
+    FilterCore.persistFiltersToCookie('/sankey-filters', { zone_type: type });
+    loadSankeyData(true);
+}
 
         // ============================================================
         //  АВТООБНОВЛЕНИЕ
@@ -1279,26 +1137,26 @@
         // ============================================================
         //  СБОРКА URL С ФИЛЬТРОМ
         // ============================================================
-        function buildQueryParams(extra = {}) {
-            const params = new URLSearchParams();
+function buildQueryParams(extra = {}) {
+    const params = new URLSearchParams();
 
-            const date = document.getElementById('analysisDate').value;
-            if (date) params.set('date', date);
-            params.set('zone_type', currentZoneType);
+    const date = document.getElementById('analysisDate').value;
+    if (date) params.set('date', date);
+    params.set('zone_type', currentZoneType);
 
-            const filters = collectFilter();
-            if (Object.keys(filters).length) {
-                params.set('filter', JSON.stringify(filters));
-            }
+    const filters = FilterCore.collectFilter();          // ← было collectFilter()
+    if (Object.keys(filters).length) {
+        params.set('filter', JSON.stringify(filters));
+    }
 
-            Object.entries(extra).forEach(([k, v]) => {
-                if (v !== undefined && v !== null && v !== '') {
-                    params.set(k, v);
-                }
-            });
-
-            return params.toString();
+    Object.entries(extra).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') {
+            params.set(k, v);
         }
+    });
+
+    return params.toString();
+}
 
         // ============================================================
         //  ЗАГРУЗКА ДАННЫХ
@@ -1465,21 +1323,21 @@
         // ============================================================
         $(document).ready(function() {
             // 1. Восстанавливаем выбранные значения в мультиселектах
-            restoreFiltersFromInitial();
+            FilterCore.restoreFiltersFromInitial(INITIAL_STATE.filters);
 
             // 2. Синхронизируем подпись для корректной работы кнопки «Применить»
-            appliedFilterSignature = filterSignature();
+            FilterCore.setAppliedSignature()
 
             // 3. Навешиваем обработчики
-            setupFilterListeners();
+            FilterCore.setupFilterListeners(applyFiltersNow);
 
             // 4. Обработчики остальных контролов
             document.getElementById('autoRefreshSwitch').addEventListener('change', toggleAutoRefresh);
             document.getElementById('refreshInterval').addEventListener('change', onRefreshIntervalChange);
             document.getElementById('analysisDate').addEventListener('change', function() {
-                persistFiltersToCookie();
-                loadSankeyData(true);
-            });
+    FilterCore.persistFiltersToCookie('/sankey-filters', { zone_type: currentZoneType });  // ← было persistFiltersToCookie()
+    loadSankeyData(true);
+});
 
             // 5. Первая загрузка
             loadSankeyData(true);
