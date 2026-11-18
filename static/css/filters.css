@@ -1,8 +1,10 @@
-        /* ── Мультиселекты фильтров ──────────────────────────── */
+     /* ── Мультиселекты фильтров ──────────────────────────── */
         .filter-select-wrap {
             position: relative;
             display: inline-block;
             vertical-align: middle;
+    min-width: 170px;
+    min-height: 31px
         }
 
         .filter-select-wrap .filter-multiselect {
