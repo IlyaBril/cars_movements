@@ -16,6 +16,7 @@ from app.services.sankey_service import SankeyService, create_snapshot_figure, p
 from app.db.schemas import NodeLayoutItem, SavePositionsResponse
 from app.services.filter_parser import parse_filter, FilterParseError
 
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["sankey"])

@@ -143,7 +143,7 @@ const FilterCore = (function () {
             date: (document.getElementById('analysisDate') || {}).value,
             zone_type: (extra && extra.zone_type) || '',
         }, extra || {});
-        delete body.zone_type === '' ? body.zone_type : '';
+        if (!body.zone_type) delete body.zone_type;
 
         fetch(endpoint, {
             method: 'POST',
