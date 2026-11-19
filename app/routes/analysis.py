@@ -8,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.services.data_service import DataService
 from app.services.filter_parser import parse_filter, FilterParseError
+from app.utils.read_filter import _read_filters_cookie
 
 
 logging.basicConfig(level=logging.INFO)
@@ -22,51 +23,6 @@ COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 дней
 
 def default_date():
     return datetime.today().strftime("%Y-%m-%d")
-
-
-def _read_filters_cookie(raw: str | None) -> dict:
-    """Читает JSON из cookie и валидирует структуру."""
-    if not raw:
-        return {}
-    try:
-        data = json.loads(raw)
-        if not isinstance(data, dict):
-            return {}
-    except (ValueError, TypeError):
-        return {}
-    result = {}
-    if isinstance(data.get("filters"), dict):
-        result["filters"] = data["filters"]
-    if isinstance(data.get("date"), str):
-        result["date"] = data["date"]
-    if isinstance(data.get("zone_type"), str):
-        result["zone_type"] = data["zone_type"]
-    return result
-
-
-@router.post("/analysis-filters")
-async def save_analysis_filters(
-    response: Response,
-    payload: dict = Body(...),
-    sankey_filters: str | None = Cookie(default=None, alias=COOKIE_NAME),
-):
-    """Сохраняет фильтры/дату/зону в общий cookie (мержит с существующим)."""
-    existing = _read_filters_cookie(sankey_filters)
-    merged = {
-        "filters": payload.get("filters", existing.get("filters", {})),
-        "date": payload.get("date", existing.get("date", default_date())),
-        "zone_type": payload.get("zone_type", existing.get("zone_type", "main")),
-    }
-    logger.info(f'cookie  {merged}')
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=json.dumps(merged, ensure_ascii=True),
-        max_age=COOKIE_MAX_AGE,
-        httponly=False,
-        samesite="lax",
-        path="/",
-    )
-    return {"success": True}
 
 
 @router.get("/")

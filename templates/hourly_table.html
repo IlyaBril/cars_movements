@@ -338,7 +338,7 @@
     function applyFiltersNow() {
         FilterCore.setAppliedSignature();
         FilterCore.updateFilterBadges();
-        FilterCore.persistFiltersToCookie('/analysis-filters', { zone_type: currentZoneType });
+        FilterCore.persistFiltersToCookie('/sankey-filters', { zone_type: currentZoneType });
         manualAnalyzeZones();
     }
 
@@ -348,7 +348,7 @@
         });
         FilterCore.setAppliedSignature();
         FilterCore.updateFilterBadges();
-        FilterCore.persistFiltersToCookie('/analysis-filters', { zone_type: currentZoneType });
+        FilterCore.persistFiltersToCookie('/sankey-filters', { zone_type: currentZoneType });
         manualAnalyzeZones();
     }
 

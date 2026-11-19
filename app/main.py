@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from .db.database import init_sqlite_database, close_db_connections
 from .config import STATIC_DIR
-from .routes import analysis, admin_groups, sankey, upload
+from .routes import analysis, admin_groups, sankey, upload, filters
 
 
 @asynccontextmanager
@@ -25,6 +25,7 @@ app.include_router(analysis.router)
 app.include_router(admin_groups.router)
 app.include_router(sankey.router)
 app.include_router(upload.router)
+app.include_router(filters.router)
 
 
 @app.get("/health")
