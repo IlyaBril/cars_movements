@@ -46,8 +46,6 @@ async def sankey_page(
         # для новых фильтров добавите здесь свои get_filter_values(...)
 
     saved = _read_filters_cookie(sankey_filters)
-
-    # filters — произвольный dict: {"VehicleModel": [...], "Точка_регистрации": [...], ...}
     saved_filters = saved.get("filters", {}) or {}
 
     default_zone = saved.get("zone_type")
@@ -55,6 +53,7 @@ async def sankey_page(
         default_zone = reports[0] if reports else "main"
 
     default_date_value = saved.get("date") or default_date()
+    auto_refresh_value = saved.get("auto_refresh", True)
 
     return templates.TemplateResponse(
         request=request,
@@ -66,6 +65,7 @@ async def sankey_page(
             "all_zones": all_zones,
             "initial_zone_type": default_zone,
             "initial_filters": saved_filters,
+            "initial_auto_refresh": auto_refresh_value,
         },
     )
 

@@ -276,7 +276,8 @@
                         </div>
 
                         <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="autoRefreshSwitch" checked>
+                            <input class="form-check-input" type="checkbox" id="autoRefreshSwitch"
+                                {% if initial_auto_refresh %}checked{% endif %}>
                             <label class="form-check-label small" for="autoRefreshSwitch">Авто</label>
                         </div>
 
@@ -414,6 +415,7 @@
         const INITIAL_STATE = {
             zoneType: {{ initial_zone_type|tojson }},
             filters: {{ initial_filters|tojson }},
+            autoRefresh: {{ initial_auto_refresh|tojson }},
         };
 
         // ============================================================
@@ -422,7 +424,7 @@
         let currentZoneType = INITIAL_STATE.zoneType
             || '{{ zone_types[0] if zone_types else "main" }}';
         let refreshTimer = null;
-        let isAutoRefreshEnabled = true;
+        let isAutoRefreshEnabled = INITIAL_STATE.autoRefresh !== false;
         let showCoords = false;
         let lastNodePositions = {};
 
@@ -512,6 +514,7 @@ function switchZoneType(type) {
         // ============================================================
         function toggleAutoRefresh() {
             isAutoRefreshEnabled = document.getElementById('autoRefreshSwitch').checked;
+            FilterCore.persistFiltersToCookie('/sankey-filters', { zone_type: currentZoneType });
             if (isAutoRefreshEnabled) {
                 startAutoRefresh();
                 showMessage('Автообновление включено', 'success');
@@ -1258,20 +1261,20 @@ function buildQueryParams(extra = {}) {
             FilterCore.setupFilterListeners(applyFiltersNow);
 
             // 4. Обработчики остальных контролов
-            document.getElementById('autoRefreshSwitch').addEventListener('change', toggleAutoRefresh);
+            const autoSw = document.getElementById('autoRefreshSwitch');
+            autoSw.checked = isAutoRefreshEnabled;
+            autoSw.addEventListener('change', toggleAutoRefresh);
+            
             document.getElementById('refreshInterval').addEventListener('change', onRefreshIntervalChange);
+            
             document.getElementById('analysisDate').addEventListener('change', function() {
-    FilterCore.persistFiltersToCookie('/sankey-filters', { zone_type: currentZoneType });  // ← было persistFiltersToCookie()
-    loadSankeyData(true);
-});
+                FilterCore.persistFiltersToCookie('/sankey-filters', { zone_type: currentZoneType });
+                loadSankeyData(true);
+            });
 
             // 5. Первая загрузка
             loadSankeyData(true);
-
-            if (document.getElementById('autoRefreshSwitch').checked) {
-                startAutoRefresh();
-            }
-
+            if (isAutoRefreshEnabled) startAutoRefresh();
             setTimeout(() => {
                 document.getElementById('toggleCoordsBtn').classList.add('show');
             }, 1000);

@@ -138,10 +138,12 @@ const FilterCore = (function () {
 
     // ---------- сохранение cookie ----------
     function persistFiltersToCookie(endpoint, extra) {
+        const autoEl = document.getElementById('autoRefreshSwitch');
         const body = Object.assign({
             filters: collectFilter(),
             date: (document.getElementById('analysisDate') || {}).value,
             zone_type: (extra && extra.zone_type) || '',
+            auto_refresh: autoEl ? autoEl.checked : true,
         }, extra || {});
         if (!body.zone_type) delete body.zone_type;
 

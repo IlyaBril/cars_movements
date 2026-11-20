@@ -36,7 +36,6 @@ def root(
         zone_types = data_service.get_zones_types()
         vehicle_models = data_service.get_filter_values("VehicleModel")
         all_zones = data_service.get_filter_values("Точка_регистрации")
-    logger.info(f'zone_types {zone_types}')
 
     saved = _read_filters_cookie(sankey_filters)
     saved_filters = saved.get("filters", {}) or {}
@@ -46,6 +45,7 @@ def root(
         default_zone = zone_types[0] if zone_types else "main"
 
     default_date_value = saved.get("date") or default_date()
+    auto_refresh_value = saved.get("auto_refresh", True)
 
     return templates.TemplateResponse(
         request=request,
@@ -57,6 +57,7 @@ def root(
             "all_zones": all_zones,
             "initial_zone_type": default_zone,
             "initial_filters": saved_filters,
+            "initial_auto_refresh": auto_refresh_value,
         },
     )
 

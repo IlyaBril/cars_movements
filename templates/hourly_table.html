@@ -43,7 +43,8 @@
 
                         <!-- Автообновление -->
                         <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="autoRefreshSwitch" checked>
+                            <input class="form-check-input" type="checkbox" id="autoRefreshSwitch" 
+                                {% if initial_auto_refresh %}checked{% endif %}>
                             <label class="form-check-label small" for="autoRefreshSwitch">Авто</label>
                         </div>
 
@@ -146,6 +147,7 @@
     const INITIAL_STATE = {
         zoneType: {{ initial_zone_type|tojson }},
         filters: {{ initial_filters|tojson }},
+        autoRefresh: {{ initial_auto_refresh|tojson }},
     };
 
     // ============================================================
@@ -154,7 +156,7 @@
     let currentZoneType = INITIAL_STATE.zoneType
         || '{{ zone_types[0] if zone_types else "main" }}';
     let refreshTimer = null;
-    let isAutoRefreshEnabled = true;
+    let isAutoRefreshEnabled = INITIAL_STATE.autoRefresh !== false;
 
     // ============================================================
     //  ПЕРЕКЛЮЧЕНИЕ ЗОНЫ
@@ -164,7 +166,7 @@
         const label = document.getElementById('selectedZone');
         if (label) label.textContent = type;
 
-        FilterCore.persistFiltersToCookie('/analysis-filters', { zone_type: type });
+        FilterCore.persistFiltersToCookie('/sankey-filters', { zone_type: type });
         manualAnalyzeZones();
     }
 
@@ -255,13 +257,9 @@
     // ============================================================
     function toggleAutoRefresh() {
         isAutoRefreshEnabled = document.getElementById('autoRefreshSwitch').checked;
-        if (isAutoRefreshEnabled) {
-            startAutoRefresh();
-            showMessage('Автообновление включено', 'success');
-        } else {
-            stopAutoRefresh();
-            showMessage('Автообновление выключено', 'info');
-        }
+        FilterCore.persistFiltersToCookie('/sankey-filters', { zone_type: currentZoneType });
+        if (isAutoRefreshEnabled) { startAutoRefresh(); showMessage('Автообновление включено', 'success'); }
+        else { stopAutoRefresh(); showMessage('Автообновление выключено', 'info'); }
     }
 
     function startAutoRefresh() {
@@ -369,10 +367,11 @@
         FilterCore.setupFilterListeners(applyFiltersNow);
 
         // Автообновление
+        document.getElementById('autoRefreshSwitch').checked = isAutoRefreshEnabled;
         document.getElementById('autoRefreshSwitch').addEventListener('change', toggleAutoRefresh);
         document.getElementById('refreshInterval').addEventListener('change', onRefreshIntervalChange);
         document.getElementById('analysisDate').addEventListener('change', function () {
-            FilterCore.persistFiltersToCookie('/analysis-filters', { zone_type: currentZoneType });
+            FilterCore.persistFiltersToCookie('/sankey-filters', { zone_type: currentZoneType });
             manualAnalyzeZones();
         });
 
