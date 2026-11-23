@@ -163,11 +163,12 @@ def get_sankey_gif(
     zone_type: str = Query(default="main"),
     interval_minutes: int = Query(default=30, ge=10, le=120),
     duration: float = Query(default=1.0, ge=0.3, le=3.0),
-    max_frames: int = Query(default=24, ge=5, le=50)
+    max_frames: int = Query(default=24, ge=5, le=50),
+    row_filters: str | None = Query(default=None, alias="filter"),
 ):
     """
-    Создает GIF-отчет динамики движения за день
-    
+    Создаёт MP4-отчёт динамики движения за день.
+
     - **date**: дата в формате YYYY-MM-DD
     - **zone_type**: тип зоны (main, etc.)
     - **interval_minutes**: интервал между кадрами (10-120 минут)
@@ -175,38 +176,44 @@ def get_sankey_gif(
     - **max_frames**: максимальное количество кадров (5-50)
     """
     try:
+        filters = parse_filter(row_filters)
+    except FilterParseError as e:
+        return JSONResponse(status_code=400, content={"error": f"Некорректный фильтр: {e}"})
+
+    try:
         gif_service = GifService()
-        
+
         with gif_service:
             start_time = datetime.now()
-            
-            gif_path = gif_service.create_gif_report(
+
+            mp4_path = gif_service.create_gif_report(
                 date=date,
                 zone_type=zone_type,
                 interval_minutes=interval_minutes,
                 duration=duration,
-                max_frames=max_frames
+                max_frames=max_frames,
+                filters=filters,       
+                convert_to_mp4=True,        # <-- ключевой флаг
             )
-            
+
             elapsed = (datetime.now() - start_time).total_seconds()
-            logger.info(f"GIF создан за {elapsed:.2f} секунд")
-            
-            if gif_path and os.path.exists(gif_path):
+            logger.info(f"MP4 создан за {elapsed:.2f} секунд")
+
+            if mp4_path and os.path.exists(mp4_path):
                 return FileResponse(
-                    gif_path,
-                    media_type="image/gif",
-                    filename=f"sankey_dynamics_{date}_{zone_type}.gif"
+                    mp4_path,
+                    media_type="video/mp4",
+                    filename=f"sankey_dynamics_{date}_{zone_type}.mp4",
                 )
             else:
                 return JSONResponse(
                     status_code=404,
-                    content={"error": "Не удалось создать GIF-отчет"}
+                    content={"error": "Не удалось создать MP4-отчёт"},
                 )
-    
+
     except Exception as e:
-        logger.error(f"Ошибка создания GIF: {e}", exc_info=True)
+        logger.error(f"Ошибка создания MP4: {e}", exc_info=True)
         return JSONResponse(
             status_code=500,
-            content={"error": f"Ошибка: {str(e)}"}
+            content={"error": f"Ошибка: {str(e)}"},
         )
-

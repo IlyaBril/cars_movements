@@ -1,13 +1,18 @@
 import os
 import tempfile
+import imageio_ffmpeg
 import logging
-from datetime import datetime, timedelta, date
-from typing import List, Optional
 import pandas as pd
 import plotly.graph_objects as go
+import subprocess
+
+from datetime import datetime, timedelta, date
+from typing import List, Optional
 from PIL import Image
+
 from app.services.data_service import DataService
 from app.services.sankey_service import get_link_colors, prepare_sankey_data, SankeyService
+
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +32,8 @@ class GifService:
         self, 
         date: str, 
         zone_type: str = "main",
-        interval_minutes: int = 30
+        interval_minutes: int = 30,
+        filters: dict | None = None,
     ) -> tuple:
         """Получение снимков с однократной загрузкой данных"""
 
@@ -35,7 +41,7 @@ class GifService:
         
         # Загрузка данных
         with self.data_service:
-            df = self.data_service.get_data(date)
+            df = self.data_service.get_data(date, filters=filters)
             zone_to_group, allowed_zones = self.data_service._prepare_zones_and_mapping(zone_type, df)
             df_transformed = self.data_service._transform_dataframe(df, zone_to_group)
         
@@ -77,75 +83,94 @@ class GifService:
         interval_minutes: int = 30,
         output_path: Optional[str] = None,
         duration: float = 1.0,
-        max_frames: int = 24
+        max_frames: int = 24,
+        convert_to_mp4: bool = True,          # <-- новый флаг
+        crf: int = 23,                        # качество H.264
+        filters: dict | None = None,
     ) -> Optional[str]:
-        """Создает GIF-отчет динамики движения"""
+        """
+        Создаёт отчёт динамики движения.
+
+        Если convert_to_mp4=True — сначала собирает GIF, затем конвертирует
+        его в MP4 и возвращает путь к MP4. Иначе — путь к GIF.
+        """
 
         snapshots, allowed_zones = self.get_hourly_snapshots_optimized(
-            date, zone_type, interval_minutes
+            date, zone_type, interval_minutes, filters=filters
         )
 
         if not snapshots:
-            logger.warning("Нет данных для создания GIF")
+            logger.warning("Нет данных для создания отчёта")
             return None
-        
+
         valid_snapshots = [
             s for s in snapshots if s['sankey_data'].get('node_labels')
-            ]
-        
+        ]
         if not valid_snapshots:
-            logger.warning("Нет снимков с данными для создания GIF")
+            logger.warning("Нет снимков с данными")
             return None
-        
+
         if len(valid_snapshots) > max_frames:
             step = max(1, len(valid_snapshots) // max_frames)
             valid_snapshots = valid_snapshots[::step]
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             frame_paths = []
-            
+
             for i, snapshot in enumerate(valid_snapshots):
                 fig = self._create_snapshot_figure(
-                    snapshot, 
-                    date, 
-                    zone_type,
-                    allowed_zones,
-                    i,
-                    len(valid_snapshots)
+                    snapshot, date, zone_type, allowed_zones,
+                    i, len(valid_snapshots),
                 )
-                
                 frame_path = os.path.join(temp_dir, f"frame_{i:03d}.png")
                 fig.write_image(frame_path, width=1200, height=800, scale=1.2)
                 frame_paths.append(frame_path)
-            
-            if output_path is None:
-                output_path = os.path.join(
-                    tempfile.gettempdir(),
-                    f"sankey_dynamics_{date}_{zone_type}.gif"
-                )
-            
+
+            if not frame_paths:
+                return None
+
+            # ---- 1. Собираем GIF во временный файл ----
+            gif_path = os.path.join(temp_dir, "report.gif")
+
             images = []
             for frame_path in frame_paths:
                 img = Image.open(frame_path)
                 if img.mode == 'RGBA':
                     img = img.convert('RGB')
                 images.append(img)
-            
-            if images:
-                images[0].save(
-                    output_path,
-                    save_all=True,
-                    append_images=images[1:],
-                    duration=duration * 1000,
-                    loop=0,
-                    optimize=True,
-                    quality=85
+
+            images[0].save(
+                gif_path,
+                save_all=True,
+                append_images=images[1:],
+                duration=duration * 1000,
+                loop=0,
+                optimize=True,
+                quality=85,
+            )
+            logger.info(f"GIF собран: {gif_path}, кадров: {len(images)}")
+
+            # ---- 2. Если нужен MP4 — конвертируем ----
+            if not convert_to_mp4:
+                final_path = output_path or os.path.join(
+                    tempfile.gettempdir(),
+                    f"sankey_dynamics_{date}_{zone_type}.gif",
                 )
-                
-                logger.info(f"GIF создан: {output_path}, кадров: {len(images)}")
-                return output_path
-        
-        return None
+                # копируем из temp_dir, т.к. он сейчас удалится
+                import shutil
+                shutil.copy2(gif_path, final_path)
+                return final_path
+
+            if output_path is None:
+                output_path = os.path.join(
+                    tempfile.gettempdir(),
+                    f"sankey_dynamics_{date}_{zone_type}.mp4",
+                )
+
+            self._convert_gif_to_mp4(gif_path, output_path, crf=crf)
+            logger.info(f"MP4 создан: {output_path}")
+            return output_path
+
     
     def _create_snapshot_figure(
         self, 
@@ -254,3 +279,53 @@ class GifService:
         )
         
         return fig
+
+    def _convert_gif_to_mp4(
+        self,
+        gif_path: str,
+        mp4_path: str,
+        crf: int = 23,
+    ) -> None:
+        """
+        Конвертирует GIF в H.264 MP4.
+
+        - pixel format yuv420p       — совместимость с браузерами/QuickTime
+        - scale=trunc(iw/2)*2:...    — H.264 требует чётные размеры
+        - +faststart                 — быстрый старт воспроизведения в вебе
+        - fps из GIF                 — берётся автоматически из файла
+        """
+        if not os.path.exists(gif_path):
+            raise FileNotFoundError(f"GIF не найден: {gif_path}")
+
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+
+        cmd = [
+            ffmpeg_exe,
+            "-y",                          # перезаписать файл
+            "-i", gif_path,
+            "-movflags", "+faststart",
+            "-pix_fmt", "yuv420p",
+            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+            "-c:v", "libx264",
+            "-crf", str(crf),
+            "-preset", "medium",
+            mp4_path,
+        ]
+
+        logger.debug(f"FFmpeg cmd: {' '.join(cmd)}")
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            logger.error(f"FFmpeg stderr:\n{result.stderr}")
+            raise RuntimeError(
+                f"FFmpeg завершился с кодом {result.returncode}"
+            )
+
+        if not os.path.exists(mp4_path):
+            raise RuntimeError("FFmpeg не создал MP4-файл")
+
