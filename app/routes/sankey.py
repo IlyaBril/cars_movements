@@ -158,7 +158,7 @@ async def sankey_save_positions(
 
 
 @router.get("/sankey-gif")
-async def get_sankey_gif(
+def get_sankey_gif(
     date: str = Query(default=default_date()),
     zone_type: str = Query(default="main"),
     interval_minutes: int = Query(default=30, ge=10, le=120),

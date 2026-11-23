@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from PIL import Image
 from app.services.data_service import DataService
-from app.services.sankey_service import ENABLE_CALIBRATION, add_calibration_node, get_link_colors, prepare_sankey_data, SankeyService
+from app.services.sankey_service import get_link_colors, prepare_sankey_data, SankeyService
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,6 @@ class GifService:
         snapshots, allowed_zones = self.get_hourly_snapshots_optimized(
             date, zone_type, interval_minutes
         )
-        logger.info(f' sanpshots {snapshots}')
 
         if not snapshots:
             logger.warning("Нет данных для создания GIF")
@@ -207,8 +206,6 @@ class GifService:
                     f'\n node_colors {node_colors}')
             
         link_colors = get_link_colors(sources, node_colors, opacity=0.4)
-
-        logger.info(f'Prepare sankey with sankey_data \n {sankey_data}')
         
         fig = go.Figure(data=[go.Sankey(
             node=dict(
